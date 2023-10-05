@@ -86,18 +86,7 @@ impl FheString {
     /// Returns whether `self` contains the string `s`. The result is an
     /// encryption of 1 if this is the case and an encryption of 0 otherwise.
     pub fn contains(&self, k: &ServerKey, s: &FheString) -> RadixCiphertext {
-        let zero = k.create_zero();
-        let mut b = zero.clone(); // Pattern contained.
-
-        (0..self.0.len() - s.0.len() + 1).for_each(|i| {
-            println!("contains: at index {i}");
-
-            // eq = self[i..i+s.len] == s
-            let eq = self.substr(k, i, s.0.len() - 1).equals(k, s);
-
-            // b = b || eq
-            b = binary_or(&k, &b, &eq);
-        });
+        let (b, _) = self.find(k, s);
         b
     }
 
@@ -129,30 +118,31 @@ impl FheString {
         (b, index)
     }
 
+    /// Returns whether `self` starts with the string `s`. The result is an
+    /// encryption of 1 if this is the case and an encryption of 0 otherwise.
+    pub fn starts_with(&self, k: &ServerKey, s: &FheString) -> RadixCiphertext {
+        let (contained, i) = self.find(k, s);
+
+        // is_start = i == 0
+        let is_start = k.k.scalar_eq_parallelized(&i, 0);
+
+        // starts_with = contained && is_start
+        k.k.mul_parallelized(&contained, &is_start)
+    }
+
     /// Returns whether `self` ends with the string `s`. The result is an
     /// encryption of 1 if this is the case and an encryption of 0 otherwise.
     pub fn ends_with(&self, k: &ServerKey, s: &FheString) -> RadixCiphertext {
-        let zero = k.create_zero();
-        let mut b = zero.clone(); // Ends with string.
+        let (contained, i) = self.find(k, s);
 
+        // is_end = self.len == i + s.len
         let self_len = self.len(k);
         let s_len = s.len(k);
+        let i_add_s_len = k.k.add_parallelized(&i, &s_len);
+        let is_end = k.k.eq_parallelized(&self_len, &i_add_s_len);
 
-        (0..self.0.len() - s.0.len() + 1).for_each(|i| {
-            println!("ends_with: at index {i}");
-
-            // eq = self[i..i+s.len] == s
-            let eq = self.substr(k, i, s.0.len() - 1).equals(k, s);
-
-            // is_end = self.len == i + s.len
-            let i_add_s_len = k.k.scalar_add_parallelized(&s_len, i as Uint);
-            let is_end = k.k.eq_parallelized(&self_len, &i_add_s_len);
-
-            // b = b || eq && is_end
-            let eq_and_is_end = k.k.mul_parallelized(&eq, &is_end);
-            b = binary_or(&k, &b, &eq_and_is_end);
-        });
-        b
+        // ends_with = contained && is_end
+        k.k.mul_parallelized(&contained, &is_end)
     }
 
     /// Returns whether `self` is empty. The result is an encryption of 1 if

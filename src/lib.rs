@@ -61,6 +61,13 @@ mod tests {
         println!("contains: {} ?= {}", b, b_dec);
         assert_eq!(b as u8, b_dec, "contains");
 
+        // starts_with
+        let b = input.starts_with(pattern) as u8;
+        let b_enc = input_enc.starts_with(&server_key, &pattern_enc);
+        let b_dec = client_key.0.decrypt::<u8>(&b_enc);
+        println!("starts_with: {} ?= {}", b, b_dec);
+        assert_eq!(b as u8, b_dec, "starts_with");
+
         // ends_with
         let b = input.ends_with(pattern) as u8;
         let b_enc = input_enc.ends_with(&server_key, &pattern_enc);
