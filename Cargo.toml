@@ -1,0 +1,10 @@
+[package]
+name = "fhe_str"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+tfhe = { git = "https://github.com/zama-ai/tfhe-rs.git", rev = "251ee9aa0e011b2f377640c6ecfd727b6108ebc9", features = [ "boolean", "shortint", "integer", "aarch64-unix" ] }
+serde = { version = "1.0", features = ["derive"] }
