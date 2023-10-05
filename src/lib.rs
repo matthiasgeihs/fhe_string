@@ -33,7 +33,7 @@ mod tests {
 
     #[test]
     fn all() {
-        let input = "defabcdef";
+        let input = "defabc";
         let pattern = "abc";
 
         let (client_key, server_key) = generate_keys(PARAM_MESSAGE_2_CARRY_2_KS_PBS);
@@ -52,6 +52,13 @@ mod tests {
         let b_enc = input_enc.contains(&server_key, &pattern_enc);
         let b_dec = client_key.0.decrypt::<u8>(&b_enc);
         println!("contains: {} ?= {}", b, b_dec);
-        assert_eq!(b as u8, b_dec, "len");
+        assert_eq!(b as u8, b_dec, "contains");
+
+        // ends_with
+        let b = input.ends_with(pattern) as u8;
+        let b_enc = input_enc.ends_with(&server_key, &pattern_enc);
+        let b_dec = client_key.0.decrypt::<u8>(&b_enc);
+        println!("ends_with: {} ?= {}", b, b_dec);
+        assert_eq!(b as u8, b_dec, "ends_with");
     }
 }

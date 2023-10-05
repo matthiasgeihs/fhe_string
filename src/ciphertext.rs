@@ -10,6 +10,8 @@ pub struct FheAsciiChar(pub(crate) RadixCiphertext);
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct FheString(pub(crate) Vec<FheAsciiChar>);
 
+type Uint = u32;
+
 impl FheString {
     /// Creates a new FheString from an ascii string using the provided key. The
     /// input string must only contain ascii characters and must not contain any
@@ -69,7 +71,7 @@ impl FheString {
             let b_mul_l = k.k.mul_parallelized(&b, &l);
 
             let e_eq_0 = k.k.scalar_eq_parallelized(&e.0, 0);
-            let e_eq_0_mul_i = k.k.scalar_mul_parallelized(&e_eq_0, i as u64);
+            let e_eq_0_mul_i = k.k.scalar_mul_parallelized(&e_eq_0, i as Uint);
 
             let not_b = k.k.sub_parallelized(&one, &b);
             let not_b_mul_e_eq_0_mul_i = k.k.mul_parallelized(&not_b, &e_eq_0_mul_i);
@@ -89,10 +91,39 @@ impl FheString {
 
         (0..self.0.len() - s.0.len() + 1).for_each(|i| {
             println!("contains: at index {i}");
+
+            // eq = self[i..i+s.len] == s
             let eq = self.substr(k, i, s.0.len() - 1).equals(k, s);
 
             // b = b || eq
             b = binary_or(&k, &b, &eq);
+        });
+
+        b
+    }
+
+    /// Returns whether `self` ends with the string `s`. The result is an
+    /// encryption of 1 if this is the case and an encryption of 0 otherwise.
+    pub fn ends_with(&self, k: &ServerKey, s: &FheString) -> RadixCiphertext {
+        let zero = k.create_zero();
+        let mut b = zero.clone(); // Ends with string.
+
+        let self_len = self.len(k);
+        let s_len = s.len(k);
+
+        (0..self.0.len() - s.0.len() + 1).for_each(|i| {
+            println!("ends_with: at index {i}");
+
+            // eq = self[i..i+s.len] == s
+            let eq = self.substr(k, i, s.0.len() - 1).equals(k, s);
+
+            // is_end = self.len == i + s.len
+            let i_add_s_len = k.k.scalar_add_parallelized(&s_len, i as Uint);
+            let is_end = k.k.eq_parallelized(&self_len, &i_add_s_len);
+
+            // b = b || eq && is_end
+            let eq_and_is_end = k.k.mul_parallelized(&eq, &is_end);
+            b = binary_or(&k, &b, &eq_and_is_end);
         });
 
         b
