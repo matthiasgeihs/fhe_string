@@ -101,6 +101,34 @@ impl FheString {
         b
     }
 
+    /// If `self` contains `s`, returns (1, i), where i is the index of the
+    /// first occurrence of `s`. Otherwise, returns (0, 0).
+    pub fn find(&self, k: &ServerKey, s: &FheString) -> (RadixCiphertext, RadixCiphertext) {
+        let zero = k.create_zero();
+        let one = k.create_one();
+        let mut b = zero.clone(); // Pattern contained.
+        let mut index = zero.clone(); // Pattern index.
+
+        (0..self.0.len() - s.0.len() + 1).for_each(|i| {
+            println!("find: at index {i}");
+
+            // eq = self[i..i+s.len] == s
+            let eq = self.substr(k, i, s.0.len() - 1).equals(k, s);
+
+            // index = b ? index : (eq ? i : 0)
+            // ==> index = b * index + (1 - b) * eq * i
+            let b_mul_index = k.k.mul_parallelized(&b, &index);
+            let not_b = k.k.sub_parallelized(&one, &b);
+            let not_b_mul_eq = k.k.mul_parallelized(&not_b, &eq);
+            let not_b_mul_eq_mul_i = k.k.scalar_mul_parallelized(&not_b_mul_eq, i as Uint);
+            index = k.k.add_parallelized(&b_mul_index, &not_b_mul_eq_mul_i);
+
+            // b = b || eq
+            b = binary_or(&k, &b, &eq);
+        });
+        (b, index)
+    }
+
     /// Returns whether `self` ends with the string `s`. The result is an
     /// encryption of 1 if this is the case and an encryption of 0 otherwise.
     pub fn ends_with(&self, k: &ServerKey, s: &FheString) -> RadixCiphertext {

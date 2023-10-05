@@ -40,6 +40,13 @@ mod tests {
         let input_enc = FheString::new(&client_key, &input, input.len()).unwrap();
         let pattern_enc = FheString::new(&client_key, &pattern, pattern.len()).unwrap();
 
+        // is_empty
+        let b = input.is_empty() as u8;
+        let b_enc = input_enc.is_empty(&server_key);
+        let b_dec = client_key.0.decrypt::<u8>(&b_enc);
+        println!("is_empty: {} ?= {}", b, b_dec);
+        assert_eq!(b as u8, b_dec, "is_empty");
+
         // len
         let l = input.len();
         let l_enc = input_enc.len(&server_key);
@@ -61,11 +68,13 @@ mod tests {
         println!("ends_with: {} ?= {}", b, b_dec);
         assert_eq!(b as u8, b_dec, "ends_with");
 
-        // is_empty
-        let b = input.is_empty() as u8;
-        let b_enc = input_enc.is_empty(&server_key);
+        // find
+        let opti = input.find(pattern);
+        let (b, i) = (opti.is_some(), opti.unwrap_or_default());
+        let (b_enc, i_enc) = input_enc.find(&server_key, &pattern_enc);
         let b_dec = client_key.0.decrypt::<u8>(&b_enc);
-        println!("is_empty: {} ?= {}", b, b_dec);
-        assert_eq!(b as u8, b_dec, "is_empty");
+        let i_dec = client_key.0.decrypt::<u32>(&i_enc);
+        println!("find: ({}, {}) ?= ({}, {})", b as u8, i, b_dec, i_dec);
+        assert_eq!((b as u8, i as u32), (b_dec, i_dec), "find");
     }
 }
