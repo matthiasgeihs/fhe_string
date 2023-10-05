@@ -60,5 +60,12 @@ mod tests {
         let b_dec = client_key.0.decrypt::<u8>(&b_enc);
         println!("ends_with: {} ?= {}", b, b_dec);
         assert_eq!(b as u8, b_dec, "ends_with");
+
+        // is_empty
+        let b = input.is_empty() as u8;
+        let b_enc = input_enc.is_empty(&server_key);
+        let b_dec = client_key.0.decrypt::<u8>(&b_enc);
+        println!("is_empty: {} ?= {}", b, b_dec);
+        assert_eq!(b as u8, b_dec, "is_empty");
     }
 }

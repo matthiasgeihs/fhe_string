@@ -55,7 +55,7 @@ impl FheString {
         Ok(FheString(fhe_chars))
     }
 
-    /// Returns the length of the encrypted string.
+    /// Returns the length of `self`.
     pub fn len(&self, k: &ServerKey) -> RadixCiphertext {
         let zero = k.create_zero();
         let one = k.create_one();
@@ -98,7 +98,6 @@ impl FheString {
             // b = b || eq
             b = binary_or(&k, &b, &eq);
         });
-
         b
     }
 
@@ -125,24 +124,14 @@ impl FheString {
             let eq_and_is_end = k.k.mul_parallelized(&eq, &is_end);
             b = binary_or(&k, &b, &eq_and_is_end);
         });
-
         b
     }
 
-    /// Returns the substring of the encrypted string starting at index i and
-    /// having length l.
-    ///
-    /// # Panics
-    /// Panics on index out of bound.
-    fn substr(&self, k: &ServerKey, i: usize, l: usize) -> Self {
-        let mut v = self.0[i..i + l].to_vec();
-
-        // Append zero if not end of string.
-        if i + l < self.0.len() {
-            let zero = FheAsciiChar(k.create_zero());
-            v.push(zero);
-        }
-        FheString(v)
+    /// Returns whether `self` is empty. The result is an encryption of 1 if
+    /// this is the case and an encryption of 0 otherwise.
+    pub fn is_empty(&self, k: &ServerKey) -> RadixCiphertext {
+        let zero = k.create_zero();
+        k.k.eq_parallelized(&self.0[0].0, &zero)
     }
 
     /// Returns whether `self` and `s` are equal. The result is an encryption of
@@ -167,6 +156,22 @@ impl FheString {
             is_equal = k.k.mul_parallelized(&is_equal, &ai_eq_bi);
         });
         is_equal
+    }
+
+    /// Returns the substring of the encrypted string starting at index i and
+    /// having length l.
+    ///
+    /// # Panics
+    /// Panics on index out of bound.
+    fn substr(&self, k: &ServerKey, i: usize, l: usize) -> Self {
+        let mut v = self.0[i..i + l].to_vec();
+
+        // Append zero if not end of string.
+        if i + l < self.0.len() {
+            let zero = FheAsciiChar(k.create_zero());
+            v.push(zero);
+        }
+        FheString(v)
     }
 
     /// Returns a copy of `self` padded to the given length.
