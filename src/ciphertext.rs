@@ -102,7 +102,7 @@ impl FheString {
             println!("find: at index {i}");
 
             // eq = self[i..i+s.len] == s
-            let eq = self.substr(k, i, s.0.len() - 1).equals(k, s);
+            let eq = self.substr_equals(k, i, s);
 
             // index = b ? index : (eq ? i : 0)
             // ==> index = b * index + (1 - b) * eq * i
@@ -121,13 +121,7 @@ impl FheString {
     /// Returns whether `self` starts with the string `s`. The result is an
     /// encryption of 1 if this is the case and an encryption of 0 otherwise.
     pub fn starts_with(&self, k: &ServerKey, s: &FheString) -> RadixCiphertext {
-        let (contained, i) = self.find(k, s);
-
-        // is_start = i == 0
-        let is_start = k.k.scalar_eq_parallelized(&i, 0);
-
-        // starts_with = contained && is_start
-        k.k.mul_parallelized(&contained, &is_start)
+        self.substr_equals(k, 0, s)
     }
 
     /// Returns whether `self` ends with the string `s`. The result is an
@@ -176,20 +170,41 @@ impl FheString {
         is_equal
     }
 
-    /// Returns the substring of the encrypted string starting at index i and
-    /// having length l.
+    /// Returns whether `self[i..i+s.len]` and `s` are equal. The result is an
+    /// encryption of 1 if this is the case and an encryption of 0 otherwise.
     ///
     /// # Panics
-    /// Panics on index out of bound.
-    fn substr(&self, k: &ServerKey, i: usize, l: usize) -> Self {
-        let mut v = self.0[i..i + l].to_vec();
+    /// Panics on index out of bounds.
+    pub fn substr_equals(&self, k: &ServerKey, i: usize, s: &FheString) -> RadixCiphertext {
+        let zero = k.create_zero();
+        let one = k.create_one();
 
-        // Append zero if not end of string.
-        if i + l < self.0.len() {
-            let zero = FheAsciiChar(k.create_zero());
-            v.push(zero);
-        }
-        FheString(v)
+        // Extract substring.
+        let a = FheString(self.0[i..].to_vec());
+
+        // Pad to same length.
+        let l = if a.0.len() > s.0.len() {
+            a.0.len()
+        } else {
+            s.0.len()
+        };
+        let a = a.pad(k, l);
+        let b = s.pad(k, l);
+
+        let mut is_equal = one.clone();
+        let mut b_terminated = zero.clone();
+
+        a.0.iter().zip(b.0).for_each(|(ai, bi)| {
+            // b_terminated = b_terminated || bi == 0
+            let bi_eq_0 = k.k.scalar_eq_parallelized(&bi.0, 0);
+            b_terminated = binary_or(k, &b_terminated, &bi_eq_0);
+
+            // is_equal = is_equal && (ai == bi || b_terminated)
+            let ai_eq_bi = k.k.eq_parallelized(&ai.0, &bi.0);
+            let ai_eq_bi_or_bterm = binary_or(k, &ai_eq_bi, &b_terminated);
+            is_equal = k.k.mul_parallelized(&is_equal, &ai_eq_bi_or_bterm);
+        });
+        is_equal
     }
 
     /// Returns a copy of `self` padded to the given length.
