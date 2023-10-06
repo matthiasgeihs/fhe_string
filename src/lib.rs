@@ -7,6 +7,7 @@ pub mod client_key;
 pub mod error;
 pub mod server_key;
 
+/// Generates a fresh key pair.
 pub fn generate_keys(params: ClassicPBSParameters) -> (ClientKey, ServerKey) {
     let ascii_bitlen = 8;
     let msg_mod = params.message_modulus.0;
@@ -44,19 +45,31 @@ mod tests {
     fn misc() {
         let (client_key, server_key, input_enc, _) = setup();
 
-        // is_empty
-        let b = INPUT.is_empty() as u8;
-        let b_enc = input_enc.is_empty(&server_key);
-        let b_dec = client_key.0.decrypt::<u8>(&b_enc);
-        println!("is_empty: {} ?= {}", b, b_dec);
-        assert_eq!(b as u8, b_dec, "is_empty");
-
         // len
         let l = INPUT.len();
         let l_enc = input_enc.len(&server_key);
         let l_dec = client_key.0.decrypt::<u64>(&l_enc);
         println!("len: {} ?= {}", l, l_dec);
         assert_eq!(l, l_dec as usize, "len");
+    }
+
+    #[test]
+    fn compare() {
+        let (client_key, server_key, input_enc, pattern_enc) = setup();
+
+        // is_empty
+        let b = INPUT.is_empty() as u8;
+        let b_enc = input_enc.is_empty(&server_key);
+        let b_dec = client_key.0.decrypt::<u8>(&b_enc);
+        println!("is_empty: {} ?= {}", b, b_dec);
+        assert_eq!(b, b_dec, "is_empty");
+
+        // eq_ignore_case
+        let eq = INPUT.eq_ignore_ascii_case(PATTERN) as u8;
+        let eq_enc = input_enc.eq_ignore_case(&server_key, &pattern_enc);
+        let eq_dec = client_key.0.decrypt::<u8>(&eq_enc);
+        println!("eq_ignore_case: {} ?= {}", eq, eq_dec);
+        assert_eq!(eq, eq_dec, "eq_ignore_case");
     }
 
     #[test]

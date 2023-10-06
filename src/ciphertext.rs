@@ -325,6 +325,33 @@ impl FheString {
         is_equal
     }
 
+    /// Returns whether `self` and `s` are equal when ignoring case. The result
+    /// is an encryption of 1 if this is the case and an encryption of 0
+    /// otherwise.
+    pub fn eq_ignore_case(&self, k: &ServerKey, s: &FheString) -> RadixCiphertext {
+        let one = k.create_one();
+
+        // Pad to same length.
+        let l = if self.0.len() > s.0.len() {
+            self.0.len()
+        } else {
+            s.0.len()
+        };
+        let a = self.pad(k, l);
+        let b = s.pad(k, l);
+
+        let mut is_equal = one.clone();
+
+        // is_equal = is_equal && ai.lower == bi.lower
+        a.0.iter().zip(b.0).for_each(|(ai, bi)| {
+            let ai_lower = ai.to_lowercase(k);
+            let bi_lower = bi.to_lowercase(k);
+            let ai_eq_bi = k.k.eq_parallelized(&ai_lower.0, &bi_lower.0);
+            is_equal = k.k.mul_parallelized(&is_equal, &ai_eq_bi);
+        });
+        is_equal
+    }
+
     /// Returns whether `self[i..i+s.len]` and `s` are equal. The result is an
     /// encryption of 1 if this is the case and an encryption of 0 otherwise.
     ///
