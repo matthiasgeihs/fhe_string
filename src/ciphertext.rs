@@ -5,6 +5,21 @@ use tfhe::integer::RadixCiphertext;
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct FheAsciiChar(pub(crate) RadixCiphertext);
 
+impl FheAsciiChar {
+    /// Returns whether this is a whitespace character.
+    pub fn is_whitespace(&self, k: &ServerKey) -> RadixCiphertext {
+        // Whitespace characters: 9 (Horizontal tab), 10 (Line feed), 11
+        // (Vertical tab), 12 (Form feed), 13 (Carriage return), 32 (Space)
+
+        // (9 <= c <= 13) || c == 32
+        let c_geq_9 = k.k.scalar_ge_parallelized(&self.0, 9 as Uint);
+        let c_leq_13 = k.k.scalar_le_parallelized(&self.0, 13 as Uint);
+        let c_geq_9_and_c_leq_13 = k.k.mul_parallelized(&c_geq_9, &c_leq_13);
+        let c_eq_32 = k.k.scalar_eq_parallelized(&self.0, 32 as Uint);
+        binary_or(k, &c_geq_9_and_c_leq_13, &c_eq_32)
+    }
+}
+
 /// FheString is a wrapper type for Vec<FheAsciiChar>. It is assumed to be
 /// 0-terminated.
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -53,6 +68,16 @@ impl FheString {
         (0..l + 1 - fhe_chars.len()).for_each(|_| fhe_chars.push(zero.clone()));
 
         Ok(FheString(fhe_chars))
+    }
+
+    pub fn decrypt(&self, k: &ClientKey) -> String {
+        let chars = self
+            .0
+            .iter()
+            .map(|c| k.0.decrypt::<u8>(&c.0))
+            .filter(|&c| c != 0u8)
+            .collect::<Vec<_>>();
+        String::from_utf8(chars).unwrap()
     }
 
     /// Returns the length of `self`.
@@ -114,6 +139,72 @@ impl FheString {
 
             // b = b || eq
             b = binary_or(&k, &b, &eq);
+        });
+        (b, index)
+    }
+
+    /// Searches `self` for a match with `m`. Returns (1, i) if a match was
+    /// found, where i is the index of the first match. Otherwise, returns (0,
+    /// 0).
+    pub fn find_char(
+        &self,
+        k: &ServerKey,
+        m: fn(&ServerKey, &FheAsciiChar) -> RadixCiphertext,
+    ) -> (RadixCiphertext, RadixCiphertext) {
+        let zero = k.create_zero();
+        let one = k.create_one();
+        let mut b = zero.clone(); // Pattern contained.
+        let mut index = zero.clone(); // Pattern index.
+
+        self.0.iter().enumerate().for_each(|(i, c)| {
+            println!("find_char: at index {i}");
+
+            // mi = m(self[i])
+            let mi = m(k, c);
+
+            // index = b ? index : (mi ? i : 0)
+            // ==> index = b * index + (1 - b) * mi * i
+            let b_mul_index = k.k.mul_parallelized(&b, &index);
+            let not_b = k.k.sub_parallelized(&one, &b);
+            let not_b_mul_eq = k.k.mul_parallelized(&not_b, &mi);
+            let not_b_mul_eq_mul_i = k.k.scalar_mul_parallelized(&not_b_mul_eq, i as Uint);
+            index = k.k.add_parallelized(&b_mul_index, &not_b_mul_eq_mul_i);
+
+            // b = b || mi
+            b = binary_or(&k, &b, &mi);
+        });
+        (b, index)
+    }
+
+    /// Searches `self` for a match with `m` in reverse direction. Returns (1,
+    /// i) if a match was found, where i is the index of the last match.
+    /// Otherwise, returns (0, 0).
+    pub fn rfind_char(
+        &self,
+        k: &ServerKey,
+        m: fn(&ServerKey, &FheAsciiChar) -> RadixCiphertext,
+    ) -> (RadixCiphertext, RadixCiphertext) {
+        let zero = k.create_zero();
+        let one = k.create_one();
+        let mut b = zero.clone(); // Pattern contained.
+        let mut index = zero.clone(); // Pattern index.
+
+        self.0.iter().enumerate().rev().for_each(|(i, c)| {
+            println!("rfind_char: at index {i}");
+
+            // mi = m(self[i])
+            let mi = m(k, c);
+
+            // index = b ? index : (mi ? i : 0)
+            // ==> index = b * index + (1 - b) * mi * i
+            let b_mul_index = k.k.mul_parallelized(&b, &index);
+            let not_b = k.k.sub_parallelized(&one, &b);
+            let not_b_mul_eq = k.k.mul_parallelized(&not_b, &mi);
+            let not_b_mul_eq_mul_i = k.k.scalar_mul_parallelized(&not_b_mul_eq, i as Uint);
+            index = k.k.add_parallelized(&b_mul_index, &not_b_mul_eq_mul_i);
+
+            // b = b || mi
+            b = binary_or(&k, &b, &mi);
         });
         (b, index)
     }
@@ -207,6 +298,86 @@ impl FheString {
         is_equal
     }
 
+    /// Returns `self[i..]` where `i` is the index of the first non-whitespace
+    /// character.
+    pub fn trim_start(&self, k: &ServerKey) -> FheString {
+        let (_, i) = self.find_char(k, |k, c| {
+            let is_whitespace = c.is_whitespace(k);
+            binary_not(k, &is_whitespace)
+        });
+
+        self.substr(k, &i)
+    }
+
+    /// Returns `self[..i+1]` where `i` is the index of the last non-whitespace
+    /// character.
+    pub fn trim_end(&self, k: &ServerKey) -> FheString {
+        let (_, i) = self.rfind_char(k, |k, c| {
+            let is_zero = k.k.scalar_eq_parallelized(&c.0, 0 as Uint);
+            let not_zero = binary_not(k, &is_zero);
+            let is_whitespace = c.is_whitespace(k);
+            let not_whitespace = binary_not(k, &is_whitespace);
+            k.k.mul_parallelized(&not_zero, &not_whitespace)
+        });
+
+        let i = k.k.scalar_add_parallelized(&i, 1 as Uint);
+        self.truncate(k, &i)
+    }
+
+    /// Returns `self[i..j+1]` where `i` is the index of the first
+    /// non-whitespace character and `j` is the index of the last non-whitespace
+    /// character.
+    pub fn trim(&self, k: &ServerKey) -> FheString {
+        let ltrim = self.trim_start(k);
+        ltrim.trim_end(k)
+    }
+
+    /// Returns `self[index..]`.
+    pub fn substr(&self, k: &ServerKey, index: &RadixCiphertext) -> FheString {
+        let v = (0..self.0.len())
+            .map(|i| {
+                // a[i] = a[i + index]
+                let i_add_index = k.k.scalar_add_parallelized(index, i as Uint);
+                self.char_at(k, &i_add_index)
+            })
+            .collect();
+        FheString(v)
+    }
+
+    /// Returns `self[..index]`.
+    pub fn truncate(&self, k: &ServerKey, index: &RadixCiphertext) -> FheString {
+        let v = self
+            .0
+            .iter()
+            .enumerate()
+            .map(|(i, c)| {
+                // a[i] = i < index ? a[i] : 0
+                let i_lt_index = k.k.scalar_gt_parallelized(index, i as Uint);
+                FheAsciiChar(k.k.mul_parallelized(&i_lt_index, &c.0))
+            })
+            .collect();
+        FheString(v)
+    }
+
+    /// Returns the character at the given index. Returns 0 if the index is out
+    /// of bounds.
+    pub fn char_at(&self, k: &ServerKey, i: &RadixCiphertext) -> FheAsciiChar {
+        let zero = k.create_zero();
+        let mut ai = zero.clone();
+
+        // ai = i == 0 ? a[0] : 0 + ... + i == n ? a[n] : 0
+        self.0.iter().enumerate().for_each(|(j, aj)| {
+            // i == j ? a[j] : 0
+            // ==> (i == j) * a[j]
+            let i_eq_j = k.k.scalar_eq_parallelized(i, j as Uint);
+            let i_eq_j_mul_aj = k.k.mul_parallelized(&i_eq_j, &aj.0);
+
+            // ai = ai + (i == j) * a[j]
+            k.k.add_assign_parallelized(&mut ai, &i_eq_j_mul_aj)
+        });
+        FheAsciiChar(ai)
+    }
+
     /// Returns a copy of `self` padded to the given length.
     ///
     /// # Panics
@@ -221,6 +392,13 @@ impl FheString {
         (0..l - self.0.len()).for_each(|_| v.push(zero.clone()));
         FheString(v)
     }
+}
+
+// Returns `not a`, assuming `a` is an encryption of a binary value.
+pub fn binary_not(k: &ServerKey, a: &RadixCiphertext) -> RadixCiphertext {
+    // 1 - a
+    let one = k.create_one();
+    k.k.sub_parallelized(&one, &a)
 }
 
 // Returns `a or b`, assuming `a` and `b` are encryptions of binary values.

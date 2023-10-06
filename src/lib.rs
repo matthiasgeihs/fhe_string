@@ -1,9 +1,6 @@
 use client_key::ClientKey;
 use server_key::ServerKey;
-use tfhe::{
-    integer::gen_keys_radix,
-    shortint::{prelude::PARAM_MESSAGE_2_CARRY_2_KS_PBS, ClassicPBSParameters},
-};
+use tfhe::{integer::gen_keys_radix, shortint::ClassicPBSParameters};
 
 pub mod ciphertext;
 pub mod client_key;
@@ -14,7 +11,7 @@ pub fn generate_keys(params: ClassicPBSParameters) -> (ClientKey, ServerKey) {
     let ascii_bitlen = 8;
     let msg_mod = params.message_modulus.0;
     let num_blocks = ascii_bitlen / msg_mod.ilog2() as usize;
-    let (client_key, server_key) = gen_keys_radix(PARAM_MESSAGE_2_CARRY_2_KS_PBS, num_blocks);
+    let (client_key, server_key) = gen_keys_radix(params, num_blocks);
     (
         ClientKey(client_key),
         ServerKey {
@@ -27,13 +24,13 @@ pub fn generate_keys(params: ClassicPBSParameters) -> (ClientKey, ServerKey) {
 
 #[cfg(test)]
 mod tests {
-    use crate::ciphertext::FheString;
+    use tfhe::shortint::prelude::PARAM_MESSAGE_2_CARRY_2_KS_PBS;
 
-    use super::*;
+    use crate::{ciphertext::FheString, generate_keys};
 
     #[test]
     fn all() {
-        let input = "defabc";
+        let input = " defabc ";
         let pattern = "abc";
 
         let (client_key, server_key) = generate_keys(PARAM_MESSAGE_2_CARRY_2_KS_PBS);
@@ -83,5 +80,26 @@ mod tests {
         let i_dec = client_key.0.decrypt::<u32>(&i_enc);
         println!("find: ({}, {}) ?= ({}, {})", b as u8, i, b_dec, i_dec);
         assert_eq!((b as u8, i as u32), (b_dec, i_dec), "find");
+
+        // trim
+        let t = input.trim();
+        let t_enc = input_enc.trim(&server_key);
+        let t_dec = t_enc.decrypt(&client_key);
+        println!("trim: {} ?= {}", t, t_dec);
+        assert_eq!(t, t_dec, "trim");
+
+        // trim_start
+        let t = input.trim_start();
+        let t_enc = input_enc.trim_start(&server_key);
+        let t_dec = t_enc.decrypt(&client_key);
+        println!("trim_start: {} ?= {}", t, t_dec);
+        assert_eq!(t, t_dec, "trim_start");
+
+        // trim_end
+        let t = input.trim_end();
+        let t_enc = input_enc.trim_end(&server_key);
+        let t_dec = t_enc.decrypt(&client_key);
+        println!("trim_end: {} ?= {}", t, t_dec);
+        assert_eq!(t, t_dec, "trim_end");
     }
 }
