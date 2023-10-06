@@ -30,7 +30,7 @@ mod tests {
 
     #[test]
     fn all() {
-        let input = " defabc ";
+        let input = " defabcabc ";
         let pattern = "abc";
 
         let (client_key, server_key) = generate_keys(PARAM_MESSAGE_2_CARRY_2_KS_PBS);
@@ -80,6 +80,15 @@ mod tests {
         let i_dec = client_key.0.decrypt::<u32>(&i_enc);
         println!("find: ({}, {}) ?= ({}, {})", b as u8, i, b_dec, i_dec);
         assert_eq!((b as u8, i as u32), (b_dec, i_dec), "find");
+
+        // rfind
+        let opti = input.rfind(pattern);
+        let (b, i) = (opti.is_some(), opti.unwrap_or_default());
+        let (b_enc, i_enc) = input_enc.rfind(&server_key, &pattern_enc);
+        let b_dec = client_key.0.decrypt::<u8>(&b_enc);
+        let i_dec = client_key.0.decrypt::<u32>(&i_enc);
+        println!("rfind: ({}, {}) ?= ({}, {})", b as u8, i, b_dec, i_dec);
+        assert_eq!((b as u8, i as u32), (b_dec, i_dec), "rfind");
 
         // trim
         let t = input.trim();

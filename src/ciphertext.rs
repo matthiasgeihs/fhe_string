@@ -143,6 +143,34 @@ impl FheString {
         (b, index)
     }
 
+    /// If `self` contains `s`, returns (1, i), where i is the index of the
+    /// last occurrence of `s`. Otherwise, returns (0, 0).
+    pub fn rfind(&self, k: &ServerKey, s: &FheString) -> (RadixCiphertext, RadixCiphertext) {
+        let zero = k.create_zero();
+        let one = k.create_one();
+        let mut b = zero.clone(); // Pattern contained.
+        let mut index = zero.clone(); // Pattern index.
+
+        (0..self.0.len() - s.0.len() + 1).rev().for_each(|i| {
+            println!("rfind: at index {i}");
+
+            // eq = self[i..i+s.len] == s
+            let eq = self.substr_equals(k, i, s);
+
+            // index = b ? index : (eq ? i : 0)
+            // ==> index = b * index + (1 - b) * eq * i
+            let b_mul_index = k.k.mul_parallelized(&b, &index);
+            let not_b = k.k.sub_parallelized(&one, &b);
+            let not_b_mul_eq = k.k.mul_parallelized(&not_b, &eq);
+            let not_b_mul_eq_mul_i = k.k.scalar_mul_parallelized(&not_b_mul_eq, i as Uint);
+            index = k.k.add_parallelized(&b_mul_index, &not_b_mul_eq_mul_i);
+
+            // b = b || eq
+            b = binary_or(&k, &b, &eq);
+        });
+        (b, index)
+    }
+
     /// Searches `self` for a match with `m`. Returns (1, i) if a match was
     /// found, where i is the index of the first match. Otherwise, returns (0,
     /// 0).
