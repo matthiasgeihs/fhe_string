@@ -119,25 +119,20 @@ impl FheString {
     /// Returns the length of `self`.
     pub fn len(&self, k: &ServerKey) -> RadixCiphertext {
         let zero = k.create_zero();
-        let one = k.create_one();
 
         let mut l = zero.clone(); // Length.
         let mut b = zero.clone(); // String terminated.
 
-        // l = b * l + (1 - b) * (e == 0) * i
+        // l = b ? l : (e == 0 ? i : 0)
         // b = b || e == 0
 
         self.0.iter().enumerate().for_each(|(i, e)| {
             println!("len: at index {i}");
-            let b_mul_l = k.k.mul_parallelized(&b, &l);
 
             let e_eq_0 = k.k.scalar_eq_parallelized(&e.0, 0);
             let e_eq_0_mul_i = k.k.scalar_mul_parallelized(&e_eq_0, i as Uint);
 
-            let not_b = k.k.sub_parallelized(&one, &b);
-            let not_b_mul_e_eq_0_mul_i = k.k.mul_parallelized(&not_b, &e_eq_0_mul_i);
-
-            l = k.k.add_parallelized(&b_mul_l, &not_b_mul_e_eq_0_mul_i);
+            l = binary_if_then_else(k, &b, &l, &e_eq_0_mul_i);
             b = binary_or(&k, &b, &e_eq_0);
         });
 
@@ -155,7 +150,6 @@ impl FheString {
     /// first occurrence of `s`. Otherwise, returns (0, 0).
     pub fn find(&self, k: &ServerKey, s: &FheString) -> (RadixCiphertext, RadixCiphertext) {
         let zero = k.create_zero();
-        let one = k.create_one();
         let mut b = zero.clone(); // Pattern contained.
         let mut index = zero.clone(); // Pattern index.
 
@@ -166,12 +160,8 @@ impl FheString {
             let eq = self.substr_equals(k, i, s);
 
             // index = b ? index : (eq ? i : 0)
-            // ==> index = b * index + (1 - b) * eq * i
-            let b_mul_index = k.k.mul_parallelized(&b, &index);
-            let not_b = k.k.sub_parallelized(&one, &b);
-            let not_b_mul_eq = k.k.mul_parallelized(&not_b, &eq);
-            let not_b_mul_eq_mul_i = k.k.scalar_mul_parallelized(&not_b_mul_eq, i as Uint);
-            index = k.k.add_parallelized(&b_mul_index, &not_b_mul_eq_mul_i);
+            let eq_mul_i = k.k.scalar_mul_parallelized(&eq, i as Uint);
+            index = binary_if_then_else(k, &b, &index, &eq_mul_i);
 
             // b = b || eq
             b = binary_or(&k, &b, &eq);
@@ -183,7 +173,6 @@ impl FheString {
     /// last occurrence of `s`. Otherwise, returns (0, 0).
     pub fn rfind(&self, k: &ServerKey, s: &FheString) -> (RadixCiphertext, RadixCiphertext) {
         let zero = k.create_zero();
-        let one = k.create_one();
         let mut b = zero.clone(); // Pattern contained.
         let mut index = zero.clone(); // Pattern index.
 
@@ -194,12 +183,8 @@ impl FheString {
             let eq = self.substr_equals(k, i, s);
 
             // index = b ? index : (eq ? i : 0)
-            // ==> index = b * index + (1 - b) * eq * i
-            let b_mul_index = k.k.mul_parallelized(&b, &index);
-            let not_b = k.k.sub_parallelized(&one, &b);
-            let not_b_mul_eq = k.k.mul_parallelized(&not_b, &eq);
-            let not_b_mul_eq_mul_i = k.k.scalar_mul_parallelized(&not_b_mul_eq, i as Uint);
-            index = k.k.add_parallelized(&b_mul_index, &not_b_mul_eq_mul_i);
+            let eq_mul_i = k.k.scalar_mul_parallelized(&eq, i as Uint);
+            index = binary_if_then_else(k, &b, &index, &eq_mul_i);
 
             // b = b || eq
             b = binary_or(&k, &b, &eq);
@@ -216,7 +201,6 @@ impl FheString {
         m: fn(&ServerKey, &FheAsciiChar) -> RadixCiphertext,
     ) -> (RadixCiphertext, RadixCiphertext) {
         let zero = k.create_zero();
-        let one = k.create_one();
         let mut b = zero.clone(); // Pattern contained.
         let mut index = zero.clone(); // Pattern index.
 
@@ -227,12 +211,8 @@ impl FheString {
             let mi = m(k, c);
 
             // index = b ? index : (mi ? i : 0)
-            // ==> index = b * index + (1 - b) * mi * i
-            let b_mul_index = k.k.mul_parallelized(&b, &index);
-            let not_b = k.k.sub_parallelized(&one, &b);
-            let not_b_mul_eq = k.k.mul_parallelized(&not_b, &mi);
-            let not_b_mul_eq_mul_i = k.k.scalar_mul_parallelized(&not_b_mul_eq, i as Uint);
-            index = k.k.add_parallelized(&b_mul_index, &not_b_mul_eq_mul_i);
+            let mi_mul_i = k.k.scalar_mul_parallelized(&mi, i as Uint);
+            index = binary_if_then_else(k, &b, &index, &mi_mul_i);
 
             // b = b || mi
             b = binary_or(&k, &b, &mi);
@@ -249,7 +229,6 @@ impl FheString {
         m: fn(&ServerKey, &FheAsciiChar) -> RadixCiphertext,
     ) -> (RadixCiphertext, RadixCiphertext) {
         let zero = k.create_zero();
-        let one = k.create_one();
         let mut b = zero.clone(); // Pattern contained.
         let mut index = zero.clone(); // Pattern index.
 
@@ -260,12 +239,8 @@ impl FheString {
             let mi = m(k, c);
 
             // index = b ? index : (mi ? i : 0)
-            // ==> index = b * index + (1 - b) * mi * i
-            let b_mul_index = k.k.mul_parallelized(&b, &index);
-            let not_b = k.k.sub_parallelized(&one, &b);
-            let not_b_mul_eq = k.k.mul_parallelized(&not_b, &mi);
-            let not_b_mul_eq_mul_i = k.k.scalar_mul_parallelized(&not_b_mul_eq, i as Uint);
-            index = k.k.add_parallelized(&b_mul_index, &not_b_mul_eq_mul_i);
+            let mi_mul_i = k.k.scalar_mul_parallelized(&mi, i as Uint);
+            index = binary_if_then_else(k, &b, &index, &mi_mul_i);
 
             // b = b || mi
             b = binary_or(&k, &b, &mi);
@@ -423,6 +398,31 @@ impl FheString {
         ltrim.trim_end(k)
     }
 
+    /// Returns a copy of `self` where the start of `self` is stripped if it is
+    /// equal to `s`.
+    pub fn strip_prefix(&self, k: &ServerKey, s: &FheString) -> FheString {
+        let b = self.substr_equals(k, 0, s);
+        let index = s.len(k);
+        let b_mul_index = k.k.mul_parallelized(&b, &index);
+        self.substr(k, &b_mul_index)
+    }
+
+    /// Returns a copy of `self` where the end of `self` is stripped if it is
+    /// equal to `s`.
+    pub fn strip_suffix(&self, k: &ServerKey, s: &FheString) -> FheString {
+        let (b, i) = self.rfind(k, s);
+        let self_len = self.len(k);
+        let s_len = s.len(k);
+
+        // index = b && (i + s_len == self_len) ? i : self_len
+        let i_add_slen = k.k.add_parallelized(&i, &s_len);
+        let i_add_slen_eq_selflen = k.k.eq_parallelized(&i_add_slen, &self_len);
+        let b_and_i_add_slen_eq_selflen = binary_and(k, &b, &i_add_slen_eq_selflen);
+        let index = binary_if_then_else(k, &b_and_i_add_slen_eq_selflen, &i, &self_len);
+
+        self.truncate(k, &index)
+    }
+
     /// Returns a copy of `self` where uppercase characters have been replaced
     /// by their lowercase counterparts.
     pub fn to_lowercase(&self, k: &ServerKey) -> FheString {
@@ -512,4 +512,24 @@ pub fn binary_or(k: &ServerKey, a: &RadixCiphertext, b: &RadixCiphertext) -> Rad
     let a_add_b = k.k.add_parallelized(a, b);
     let a_mul_b = k.k.mul_parallelized(a, b);
     k.k.sub_parallelized(&a_add_b, &a_mul_b)
+}
+
+// Returns `a and b`, assuming `a` and `b` are encryptions of binary values.
+pub fn binary_and(k: &ServerKey, a: &RadixCiphertext, b: &RadixCiphertext) -> RadixCiphertext {
+    // a * b
+    k.k.mul_parallelized(a, b)
+}
+
+// Returns `a ? b : c`, assuming `a` is an encryption of a binary value.
+pub fn binary_if_then_else(
+    k: &ServerKey,
+    a: &RadixCiphertext,
+    b: &RadixCiphertext,
+    c: &RadixCiphertext,
+) -> RadixCiphertext {
+    // a * b + (1 - a) * c
+    let a_mul_b = k.k.mul_parallelized(a, b);
+    let not_a = binary_not(k, a);
+    let not_a_mul_c = k.k.mul_parallelized(&not_a, c);
+    k.k.add_parallelized(&a_mul_b, &not_a_mul_c)
 }
