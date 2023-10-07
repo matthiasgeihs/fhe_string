@@ -70,6 +70,34 @@ mod tests {
         let eq_dec = client_key.0.decrypt::<u8>(&eq_enc);
         println!("eq_ignore_case: {} ?= {}", eq, eq_dec);
         assert_eq!(eq, eq_dec, "eq_ignore_case");
+
+        // eq
+        let eq = INPUT.eq(PATTERN) as u8;
+        let eq_enc = input_enc.eq(&server_key, &pattern_enc);
+        let eq_dec = client_key.0.decrypt::<u8>(&eq_enc);
+        println!("eq: {} ?= {}", eq, eq_dec);
+        assert_eq!(eq, eq_dec, "eq");
+
+        // ne
+        let ne = INPUT.ne(PATTERN) as u8;
+        let ne_enc = input_enc.ne(&server_key, &pattern_enc);
+        let ne_dec = client_key.0.decrypt::<u8>(&ne_enc);
+        println!("ne: {} ?= {}", ne, ne_dec);
+        assert_eq!(ne, ne_dec, "ne");
+
+        // le
+        let le = INPUT.le(PATTERN) as u8;
+        let le_enc = input_enc.le(&server_key, &pattern_enc);
+        let le_dec = client_key.0.decrypt::<u8>(&le_enc);
+        println!("le: {} ?= {}", le, le_dec);
+        assert_eq!(le, le_dec, "le");
+
+        // ge
+        let ge = INPUT.ge(PATTERN) as u8;
+        let ge_enc = input_enc.ge(&server_key, &pattern_enc);
+        let ge_dec = client_key.0.decrypt::<u8>(&ge_enc);
+        println!("ge: {} ?= {}", ge, ge_dec);
+        assert_eq!(ge, ge_dec, "ge");
     }
 
     #[test]

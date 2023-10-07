@@ -157,7 +157,7 @@ impl FheString {
             println!("find: at index {i}");
 
             // eq = self[i..i+s.len] == s
-            let eq = self.substr_equals(k, i, s);
+            let eq = self.substr_eq(k, i, s);
 
             // index = b ? index : (eq ? i : 0)
             let eq_mul_i = k.k.scalar_mul_parallelized(&eq, i as Uint);
@@ -180,7 +180,7 @@ impl FheString {
             println!("rfind: at index {i}");
 
             // eq = self[i..i+s.len] == s
-            let eq = self.substr_equals(k, i, s);
+            let eq = self.substr_eq(k, i, s);
 
             // index = b ? index : (eq ? i : 0)
             let eq_mul_i = k.k.scalar_mul_parallelized(&eq, i as Uint);
@@ -251,7 +251,7 @@ impl FheString {
     /// Returns whether `self` starts with the string `s`. The result is an
     /// encryption of 1 if this is the case and an encryption of 0 otherwise.
     pub fn starts_with(&self, k: &ServerKey, s: &FheString) -> RadixCiphertext {
-        self.substr_equals(k, 0, s)
+        self.substr_eq(k, 0, s)
     }
 
     /// Returns whether `self` ends with the string `s`. The result is an
@@ -276,11 +276,9 @@ impl FheString {
         k.k.eq_parallelized(&self.0[0].0, &zero)
     }
 
-    /// Returns whether `self` and `s` are equal. The result is an encryption of
-    /// 1 if this is the case and an encryption of 0 otherwise.
-    pub fn equals(&self, k: &ServerKey, s: &FheString) -> RadixCiphertext {
-        let one = k.create_one();
-
+    /// Returns `self == s`. The result is an encryption of 1 if this is the
+    /// case and an encryption of 0 otherwise.
+    pub fn eq(&self, k: &ServerKey, s: &FheString) -> RadixCiphertext {
         // Pad to same length.
         let l = if self.0.len() > s.0.len() {
             self.0.len()
@@ -290,14 +288,69 @@ impl FheString {
         let a = self.pad(k, l);
         let b = s.pad(k, l);
 
-        let mut is_equal = one.clone();
+        let mut is_eq = k.create_one();
 
-        // is_equal = is_equal && ai == bi
+        // is_eq = is_eq && ai == bi
         a.0.iter().zip(b.0).for_each(|(ai, bi)| {
             let ai_eq_bi = k.k.eq_parallelized(&ai.0, &bi.0);
-            is_equal = k.k.mul_parallelized(&is_equal, &ai_eq_bi);
+            is_eq = k.k.mul_parallelized(&is_eq, &ai_eq_bi);
         });
-        is_equal
+        is_eq
+    }
+
+    /// Returns `self != s`. The result is an encryption of 1 if this is the
+    /// case and an encryption of 0 otherwise.
+    pub fn ne(&self, k: &ServerKey, s: &FheString) -> RadixCiphertext {
+        let eq = self.eq(k, s);
+        binary_not(k, &eq)
+    }
+
+    /// Returns `self <= s`. The result is an encryption of 1 if this is the
+    /// case and an encryption of 0 otherwise.
+    pub fn le(&self, k: &ServerKey, s: &FheString) -> RadixCiphertext {
+        let s_lt_self = s.lt(k, &self);
+        binary_not(k, &s_lt_self)
+    }
+
+    /// Returns `self < s`. The result is an encryption of 1 if this is the case
+    /// and an encryption of 0 otherwise.
+    pub fn lt(&self, k: &ServerKey, s: &FheString) -> RadixCiphertext {
+        // Pad to same length.
+        let l = if self.0.len() > s.0.len() {
+            self.0.len()
+        } else {
+            s.0.len()
+        };
+        let a = self.pad(k, l);
+        let b = s.pad(k, l);
+
+        let mut is_lt = k.create_zero();
+        let mut is_eq = k.create_one();
+
+        // is_lt = is_lt || ai < bi
+        a.0.iter().zip(b.0).for_each(|(ai, bi)| {
+            // is_lt = is_lt || ai < bi && is_eq
+            let ai_lt_bi = k.k.lt_parallelized(&ai.0, &bi.0);
+            let ai_lt_bi_and_eq = binary_and(k, &ai_lt_bi, &is_eq);
+            is_lt = binary_or(k, &is_lt, &ai_lt_bi_and_eq);
+
+            // is_eq = is_eq && ai == bi
+            let ai_eq_bi = k.k.le_parallelized(&ai.0, &bi.0);
+            is_eq = k.k.mul_parallelized(&is_eq, &ai_eq_bi);
+        });
+        is_lt
+    }
+
+    /// Returns `self >= s`. The result is an encryption of 1 if this is the
+    /// case and an encryption of 0 otherwise.
+    pub fn ge(&self, k: &ServerKey, s: &FheString) -> RadixCiphertext {
+        s.le(k, &self)
+    }
+
+    /// Returns `self > s`. The result is an encryption of 1 if this is the
+    /// case and an encryption of 0 otherwise.
+    pub fn gt(&self, k: &ServerKey, s: &FheString) -> RadixCiphertext {
+        s.lt(k, &self)
     }
 
     /// Returns whether `self` and `s` are equal when ignoring case. The result
@@ -332,7 +385,7 @@ impl FheString {
     ///
     /// # Panics
     /// Panics on index out of bounds.
-    pub fn substr_equals(&self, k: &ServerKey, i: usize, s: &FheString) -> RadixCiphertext {
+    pub fn substr_eq(&self, k: &ServerKey, i: usize, s: &FheString) -> RadixCiphertext {
         let zero = k.create_zero();
         let one = k.create_one();
 
@@ -401,7 +454,7 @@ impl FheString {
     /// Returns a copy of `self` where the start of `self` is stripped if it is
     /// equal to `s`.
     pub fn strip_prefix(&self, k: &ServerKey, s: &FheString) -> FheString {
-        let b = self.substr_equals(k, 0, s);
+        let b = self.substr_eq(k, 0, s);
         let index = s.len(k);
         let b_mul_index = k.k.mul_parallelized(&b, &index);
         self.substr(k, &b_mul_index)
