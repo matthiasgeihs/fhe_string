@@ -224,5 +224,15 @@ mod tests {
         let c_dec = c_enc.decrypt(&client_key);
         println!("append: {} ?= {}", c, c_dec);
         assert_eq!(c, c_dec, "append");
+
+        // repeat
+        let n = 3;
+        let l = 8;
+        let n_enc = client_key.0.encrypt(n as u8);
+        let c = INPUT.repeat(n);
+        let c_enc = input_enc.repeat(&server_key, &n_enc, l);
+        let c_dec = c_enc.decrypt(&client_key);
+        println!("repeat: {} ?= {}", c, c_dec);
+        assert_eq!(c, c_dec, "repeat");
     }
 }

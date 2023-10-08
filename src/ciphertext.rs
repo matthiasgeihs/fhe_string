@@ -530,6 +530,8 @@ impl FheString {
 
         // ai = i == 0 ? a[0] : 0 + ... + i == n ? a[n] : 0
         self.0.iter().enumerate().for_each(|(j, aj)| {
+            println!("char_at: at index {j}");
+
             // i == j ? a[j] : 0
             // ==> (i == j) * a[j]
             let i_eq_j = k.k.scalar_eq_parallelized(i, j as Uint);
@@ -545,6 +547,35 @@ impl FheString {
     pub fn append(&self, k: &ServerKey, s: &FheString) -> FheString {
         let self_len = self.len(k);
         self.insert(k, &self_len, s)
+    }
+
+    /// Returns `self` repeated `n` times up to length `l`.
+    pub fn repeat(&self, k: &ServerKey, n: &RadixCiphertext, l: usize) -> FheString {
+        let l = std::cmp::min(l, Self::max_len(k));
+        let self_len = self.len(k);
+        let n_mul_self_len = k.k.mul_parallelized(n, &self_len);
+        let mut v = (0..l)
+            .map(|i| {
+                println!("repeat: at index {i}");
+
+                // v[i] = i < n * self.len ? self[i % self.len] : 0
+                let i_radix = k.create_value(i as u64);
+                let i_lt_n_mul_self_len = k.k.lt_parallelized(&i_radix, &n_mul_self_len);
+                let i_mod_self_len = k.k.rem_parallelized(&i_radix, &self_len);
+                let self_i_mod_self_len = self.char_at(k, &i_mod_self_len);
+                let vi = binary_if_then_else(
+                    k,
+                    &i_lt_n_mul_self_len,
+                    &self_i_mod_self_len.0,
+                    &k.create_zero(),
+                );
+                FheAsciiChar(vi)
+            })
+            .collect::<Vec<_>>();
+
+        // Append 0 to terminate string.
+        v.push(FheAsciiChar(k.create_zero()));
+        FheString(v)
     }
 
     /// Returns a copy of `self` where `s` is inserted at the given index.
