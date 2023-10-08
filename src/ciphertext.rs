@@ -1,4 +1,8 @@
-use crate::{client_key::ClientKey, error::Error, server_key::ServerKey};
+use crate::{
+    client_key::{ClientKey, Key},
+    error::Error,
+    server_key::ServerKey,
+};
 use tfhe::integer::RadixCiphertext;
 
 /// FheAsciiChar is a wrapper type for RadixCiphertext.
@@ -61,6 +65,7 @@ impl FheAsciiChar {
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct FheString(pub(crate) Vec<FheAsciiChar>);
 
+/// Type used for scalar operations.
 type Uint = u32;
 
 impl FheString {
@@ -78,9 +83,9 @@ impl FheString {
             return Err("string is not ascii".into());
         } else if s.chars().find(|&x| x as u8 == 0).is_some() {
             return Err("string contains 0 char".into());
-        } else if s.len() > k.max_int() - 1 {
+        } else if s.len() > Self::max_len(k) {
             return Err("string length exceeds maximum length".into());
-        } else if l > k.max_int() - 1 {
+        } else if l > Self::max_len(k) {
             return Err("pad length exceeds maximum length".into());
         } else if l < s.len() {
             return Err("string length exceeds pad length".into());
@@ -536,12 +541,68 @@ impl FheString {
         FheAsciiChar(ai)
     }
 
+    /// Returns `self + s`.
+    pub fn append(&self, k: &ServerKey, s: &FheString) -> FheString {
+        let self_len = self.len(k);
+        self.insert(k, &self_len, s)
+    }
+
+    /// Returns a copy of `self` where `s` is inserted at the given index.
+    ///
+    /// # Panics
+    /// Panics on index out of bounds.
+    pub fn insert(&self, k: &ServerKey, index: &RadixCiphertext, s: &FheString) -> FheString {
+        let a = self;
+        let b = s;
+        let l = std::cmp::min(a.0.len() + b.0.len() - 2, Self::max_len(k));
+        let b_len = b.len(k);
+
+        let mut v = (0..l)
+            .map(|i| {
+                // v[i] = i < index ? a[i] : (i < index + b.len ? b[i - index] : a[i - index])
+
+                // c0 = i < index
+                let c0 = k.k.scalar_gt_parallelized(index, i as Uint);
+
+                // c1 = a[i]
+                let c1 = &a.0[i % a.0.len()].0;
+
+                // c2 = i < index + b.len ? b[i - index] : a[i - index]
+                let index_add_blen = k.k.add_parallelized(index, &b_len);
+                let i_leq_index_add_blen = k.k.scalar_gt_parallelized(&index_add_blen, i as Uint);
+                let i_radix = k.create_value(i as u64);
+                let i_sub_index = k.k.sub_parallelized(&i_radix, &index);
+                let b_i_sub_index = b.char_at(k, &i_sub_index);
+                let a_i_sub_index = a.char_at(k, &i_sub_index);
+                let c2 = binary_if_then_else(
+                    k,
+                    &i_leq_index_add_blen,
+                    &b_i_sub_index.0,
+                    &a_i_sub_index.0,
+                );
+
+                // c = c0 ? c1 : c2
+                let c = binary_if_then_else(k, &c0, c1, &c2);
+                FheAsciiChar(c)
+            })
+            .collect::<Vec<_>>();
+
+        // Append 0 to terminate string.
+        v.push(FheAsciiChar(k.create_zero()));
+        FheString(v)
+    }
+
+    /// Returns the maximum length of an FheString.
+    pub fn max_len<K: Key>(k: &K) -> usize {
+        k.max_int() - 1
+    }
+
     /// Returns a copy of `self` padded to the given length.
     ///
     /// # Panics
     /// Panics if l exceeds the maximum length.
     fn pad(&self, k: &ServerKey, l: usize) -> Self {
-        if l > k.max_int() - 1 {
+        if l > Self::max_len(k) {
             panic!("pad length exceeds maximum length")
         }
 

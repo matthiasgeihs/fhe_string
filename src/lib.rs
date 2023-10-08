@@ -213,4 +213,16 @@ mod tests {
         println!("to_lowercase: {} ?= {}", t, t_dec);
         assert_eq!(t, t_dec, "to_lowercase");
     }
+
+    #[test]
+    fn modify() {
+        let (client_key, server_key, input_enc, pattern_enc) = setup();
+
+        // append
+        let c = INPUT.to_string() + PATTERN;
+        let c_enc = input_enc.append(&server_key, &pattern_enc);
+        let c_dec = c_enc.decrypt(&client_key);
+        println!("append: {} ?= {}", c, c_dec);
+        assert_eq!(c, c_dec, "append");
+    }
 }
