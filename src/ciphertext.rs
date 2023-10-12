@@ -3,6 +3,7 @@ use crate::{
     error::Error,
     server_key::ServerKey,
 };
+use rayon::prelude::*;
 use tfhe::integer::RadixCiphertext;
 
 /// FheAsciiChar is a wrapper type for RadixCiphertext.
@@ -179,6 +180,7 @@ impl FheString {
     /// Formally: v[i] = self.substr_eq(k, i, s)
     pub fn find_all(&self, k: &ServerKey, s: &FheString) -> Vec<RadixCiphertext> {
         (0..self.0.len() - 1)
+            .into_par_iter()
             .map(|i| {
                 println!("find_all: at index {i}");
                 self.substr_eq(k, i, s)
@@ -534,20 +536,24 @@ impl FheString {
     /// Returns the character at the given index. Returns 0 if the index is out
     /// of bounds.
     pub fn char_at(&self, k: &ServerKey, i: &RadixCiphertext) -> FheAsciiChar {
-        let mut ai = k.create_zero();
-
         // ai = i == 0 ? a[0] : 0 + ... + i == n ? a[n] : 0
-        self.0.iter().enumerate().for_each(|(j, aj)| {
-            println!("char_at: at index {j}");
+        let v = self
+            .0
+            .par_iter()
+            .enumerate()
+            .map(|(j, aj)| {
+                println!("char_at: at index {j}");
 
-            // i == j ? a[j] : 0
-            // ==> (i == j) * a[j]
-            let i_eq_j = k.k.scalar_eq_parallelized(i, j as Uint);
-            let i_eq_j_mul_aj = k.k.mul_parallelized(&i_eq_j, &aj.0);
+                // i == j ? a[j] : 0
+                let i_eq_j = k.k.scalar_eq_parallelized(i, j as Uint);
+                let i_eq_j_mul_aj = k.k.mul_parallelized(&i_eq_j, &aj.0);
+                i_eq_j_mul_aj
+            })
+            .collect::<Vec<_>>();
 
-            // ai = ai + (i == j) * a[j]
-            k.k.add_assign_parallelized(&mut ai, &i_eq_j_mul_aj)
-        });
+        let ai =
+            k.k.unchecked_sum_ciphertexts_slice_parallelized(&v)
+                .unwrap_or(k.create_zero());
         FheAsciiChar(ai)
     }
 
@@ -740,19 +746,20 @@ pub fn binary_if_then_else(
 
 // Return the value of v[i] or 0 if i is out of bounds.
 pub fn element_at(k: &ServerKey, v: &[RadixCiphertext], i: &RadixCiphertext) -> RadixCiphertext {
-    let mut ai = k.create_zero();
-
     // ai = i == 0 ? a[0] : 0 + ... + i == n ? a[n] : 0
-    v.iter().enumerate().for_each(|(j, aj)| {
-        println!("element_at: at index {j}");
+    let v = v
+        .par_iter()
+        .enumerate()
+        .map(|(j, aj)| {
+            println!("element_at: at index {j}");
 
-        // i == j ? a[j] : 0
-        // ==> (i == j) * a[j]
-        let i_eq_j = k.k.scalar_eq_parallelized(i, j as Uint);
-        let i_eq_j_mul_aj = k.k.mul_parallelized(&i_eq_j, &aj);
+            // i == j ? a[j] : 0
+            let i_eq_j = k.k.scalar_eq_parallelized(i, j as Uint);
+            let i_eq_j_mul_aj = k.k.mul_parallelized(&i_eq_j, &aj);
+            i_eq_j_mul_aj
+        })
+        .collect::<Vec<_>>();
 
-        // ai = ai + (i == j) * a[j]
-        k.k.add_assign_parallelized(&mut ai, &i_eq_j_mul_aj)
-    });
-    ai
+    k.k.unchecked_sum_ciphertexts_slice_parallelized(&v)
+        .unwrap_or(k.create_zero())
 }
