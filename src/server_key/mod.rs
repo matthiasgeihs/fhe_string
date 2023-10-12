@@ -1,6 +1,8 @@
 use std::fmt::Debug;
 
-use tfhe::integer::{RadixCiphertext, ServerKey as IntegerServerKey};
+use tfhe::integer::{
+    block_decomposition::DecomposableInto, RadixCiphertext, ServerKey as IntegerServerKey,
+};
 
 use crate::client_key::Key;
 
@@ -31,9 +33,9 @@ impl ServerKey {
     }
 
     /// Returns an encryption of the specified value.
-    pub fn create_value(&self, v: u64) -> RadixCiphertext {
+    pub fn create_value<T: DecomposableInto<u64>>(&self, v: T) -> RadixCiphertext {
         self.k
-            .create_trivial_radix::<u64, RadixCiphertext>(v, self.num_blocks)
+            .create_trivial_radix::<T, RadixCiphertext>(v, self.num_blocks)
     }
 }
 

@@ -123,10 +123,8 @@ impl FheString {
 
     /// Returns the length of `self`.
     pub fn len(&self, k: &ServerKey) -> RadixCiphertext {
-        let zero = k.create_zero();
-
-        let mut l = zero.clone(); // Length.
-        let mut b = zero.clone(); // String terminated.
+        let mut l = k.create_zero(); // Length.
+        let mut b = k.create_zero(); // String terminated.
 
         // l = b ? l : (e == 0 ? i : 0)
         // b = b || e == 0
@@ -158,7 +156,7 @@ impl FheString {
         let mut b = zero.clone(); // Pattern contained.
         let mut index = zero.clone(); // Pattern index.
 
-        (0..self.0.len() - s.0.len() + 1).for_each(|i| {
+        (0..self.0.len() - 1).for_each(|i| {
             println!("find: at index {i}");
 
             // eq = self[i..i+s.len] == s
@@ -172,6 +170,20 @@ impl FheString {
             b = binary_or(&k, &b, &eq);
         });
         (b, index)
+    }
+
+    /// Returns a vector v of length self.len where the i-th entry is an
+    /// encryption of 1 if the substring of self starting from i matches s, and
+    /// an encryption of 0 otherwise.
+    ///
+    /// Formally: v[i] = self.substr_eq(k, i, s)
+    pub fn find_all(&self, k: &ServerKey, s: &FheString) -> Vec<RadixCiphertext> {
+        (0..self.0.len() - 1)
+            .map(|i| {
+                println!("find_all: at index {i}");
+                self.substr_eq(k, i, s)
+            })
+            .collect::<Vec<_>>()
     }
 
     /// If `self` contains `s`, returns (1, i), where i is the index of the
@@ -391,9 +403,6 @@ impl FheString {
     /// # Panics
     /// Panics on index out of bounds.
     pub fn substr_eq(&self, k: &ServerKey, i: usize, s: &FheString) -> RadixCiphertext {
-        let zero = k.create_zero();
-        let one = k.create_one();
-
         // Extract substring.
         let a = FheString(self.0[i..].to_vec());
 
@@ -406,8 +415,8 @@ impl FheString {
         let a = a.pad(k, l);
         let b = s.pad(k, l);
 
-        let mut is_equal = one.clone();
-        let mut b_terminated = zero.clone();
+        let mut is_equal = k.create_one();
+        let mut b_terminated = k.create_zero();
 
         a.0.iter().zip(b.0).for_each(|(ai, bi)| {
             // b_terminated = b_terminated || bi == 0
@@ -525,8 +534,7 @@ impl FheString {
     /// Returns the character at the given index. Returns 0 if the index is out
     /// of bounds.
     pub fn char_at(&self, k: &ServerKey, i: &RadixCiphertext) -> FheAsciiChar {
-        let zero = k.create_zero();
-        let mut ai = zero.clone();
+        let mut ai = k.create_zero();
 
         // ai = i == 0 ? a[0] : 0 + ... + i == n ? a[n] : 0
         self.0.iter().enumerate().for_each(|(j, aj)| {
@@ -559,7 +567,7 @@ impl FheString {
                 println!("repeat: at index {i}");
 
                 // v[i] = i < n * self.len ? self[i % self.len] : 0
-                let i_radix = k.create_value(i as u64);
+                let i_radix = k.create_value(i as Uint);
                 let i_lt_n_mul_self_len = k.k.lt_parallelized(&i_radix, &n_mul_self_len);
                 let i_mod_self_len = k.k.rem_parallelized(&i_radix, &self_len);
                 let self_i_mod_self_len = self.char_at(k, &i_mod_self_len);
@@ -572,6 +580,57 @@ impl FheString {
                 FheAsciiChar(vi)
             })
             .collect::<Vec<_>>();
+
+        // Append 0 to terminate string.
+        v.push(FheAsciiChar(k.create_zero()));
+        FheString(v)
+    }
+
+    /// Returns `self` where `p` is replaced by `s` up to length `l`.
+    pub fn replace(&self, k: &ServerKey, p: &FheString, s: &FheString, l: usize) -> FheString {
+        let l = std::cmp::min(l, Self::max_len(k));
+
+        // found[i] = self.substr_eq(i, p)
+        let found = self.find_all(k, p);
+        let p_len = p.len(k);
+        let s_len = s.len(k);
+        let len_diff = k.k.sub_parallelized(&p_len, &s_len);
+
+        /*
+        (in_match, j, n) = (false, 0, 0)
+        for i in 0..l:
+            c = i + n * (p.len - s.len)
+            (in_match, j, n) = in_match && j < s.len ? (in_match, j, n) : (found[c], 0, n + found[c])
+            v[i] = in_match ? s[j] : self[c]
+            j += 1
+         */
+        let mut in_match = k.create_zero();
+        let mut j = k.create_zero();
+        let mut n = k.create_zero();
+        let mut v = Vec::<FheAsciiChar>::new();
+        let zero = k.create_zero();
+        (0..l).for_each(|i| {
+            println!("replace: at index {i}");
+
+            // c = i + n * len_diff
+            let n_mul_lendiff = k.k.mul_parallelized(&n, &len_diff);
+            let c = k.k.scalar_add_parallelized(&n_mul_lendiff, i as Uint);
+
+            let j_lt_slen = k.k.lt_parallelized(&j, &s_len);
+            let b = binary_and(k, &in_match, &j_lt_slen);
+            let found_c = element_at(k, &found, &c);
+            let n_add_found_i = k.k.add_parallelized(&n, &found_c);
+            in_match = binary_if_then_else(k, &b, &in_match, &found_c);
+            j = binary_if_then_else(k, &b, &j, &zero);
+            n = binary_if_then_else(k, &b, &n, &n_add_found_i);
+
+            let sj = s.char_at(k, &j).0;
+            let self_c = self.char_at(k, &c).0;
+            let vi = binary_if_then_else(k, &in_match, &sj, &self_c);
+            v.push(FheAsciiChar(vi));
+
+            j = k.k.scalar_add_parallelized(&j, 1 as Uint);
+        });
 
         // Append 0 to terminate string.
         v.push(FheAsciiChar(k.create_zero()));
@@ -601,7 +660,7 @@ impl FheString {
                 // c2 = i < index + b.len ? b[i - index] : a[i - index]
                 let index_add_blen = k.k.add_parallelized(index, &b_len);
                 let i_leq_index_add_blen = k.k.scalar_gt_parallelized(&index_add_blen, i as Uint);
-                let i_radix = k.create_value(i as u64);
+                let i_radix = k.create_value(i as Uint);
                 let i_sub_index = k.k.sub_parallelized(&i_radix, &index);
                 let b_i_sub_index = b.char_at(k, &i_sub_index);
                 let a_i_sub_index = a.char_at(k, &i_sub_index);
@@ -677,4 +736,23 @@ pub fn binary_if_then_else(
     let not_a = binary_not(k, a);
     let not_a_mul_c = k.k.mul_parallelized(&not_a, c);
     k.k.add_parallelized(&a_mul_b, &not_a_mul_c)
+}
+
+// Return the value of v[i] or 0 if i is out of bounds.
+pub fn element_at(k: &ServerKey, v: &[RadixCiphertext], i: &RadixCiphertext) -> RadixCiphertext {
+    let mut ai = k.create_zero();
+
+    // ai = i == 0 ? a[0] : 0 + ... + i == n ? a[n] : 0
+    v.iter().enumerate().for_each(|(j, aj)| {
+        println!("element_at: at index {j}");
+
+        // i == j ? a[j] : 0
+        // ==> (i == j) * a[j]
+        let i_eq_j = k.k.scalar_eq_parallelized(i, j as Uint);
+        let i_eq_j_mul_aj = k.k.mul_parallelized(&i_eq_j, &aj);
+
+        // ai = ai + (i == j) * a[j]
+        k.k.add_assign_parallelized(&mut ai, &i_eq_j_mul_aj)
+    });
+    ai
 }
