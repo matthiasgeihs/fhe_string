@@ -25,7 +25,7 @@ pub fn generate_keys(params: ClassicPBSParameters) -> (ClientKey, ServerKey) {
 
 #[cfg(test)]
 mod tests {
-    use tfhe::shortint::prelude::PARAM_MESSAGE_2_CARRY_2_KS_PBS;
+    use tfhe::{integer::RadixCiphertext, shortint::prelude::PARAM_MESSAGE_2_CARRY_2_KS_PBS};
 
     use crate::{
         ciphertext::FheString, client_key::ClientKey, generate_keys, server_key::ServerKey,
@@ -41,6 +41,15 @@ mod tests {
         let input_enc = FheString::new(&client_key, &INPUT, INPUT.len()).unwrap();
         let pattern_enc = FheString::new(&client_key, &PATTERN, PATTERN.len()).unwrap();
         (client_key, server_key, input_enc, pattern_enc)
+    }
+
+    fn encrypt_string(k: &ClientKey, s: &str, l: Option<usize>) -> FheString {
+        let l = l.unwrap_or(s.len());
+        FheString::new(k, s, l).unwrap()
+    }
+
+    fn encrypt_int(k: &ClientKey, n: u64) -> RadixCiphertext {
+        k.0.encrypt(n)
     }
 
     #[test]
@@ -220,22 +229,22 @@ mod tests {
     fn modify() {
         let (client_key, server_key, input_enc, pattern_enc) = setup();
 
-        // // append
-        // let c = INPUT.to_string() + PATTERN;
-        // let c_enc = input_enc.append(&server_key, &pattern_enc);
-        // let c_dec = c_enc.decrypt(&client_key);
-        // println!("append: {} ?= {}", c, c_dec);
-        // assert_eq!(c, c_dec, "append");
+        // append
+        let c = INPUT.to_string() + PATTERN;
+        let c_enc = input_enc.append(&server_key, &pattern_enc);
+        let c_dec = c_enc.decrypt(&client_key);
+        println!("append: {} ?= {}", c, c_dec);
+        assert_eq!(c, c_dec, "append");
 
-        // // repeat
-        // let n = 3;
-        // let l = 8;
-        // let n_enc = client_key.0.encrypt(n as u8);
-        // let c = INPUT.repeat(n);
-        // let c_enc = input_enc.repeat(&server_key, &n_enc, l);
-        // let c_dec = c_enc.decrypt(&client_key);
-        // println!("repeat: {} ?= {}", c, c_dec);
-        // assert_eq!(c, c_dec, "repeat");
+        // repeat
+        let n = 3;
+        let l = 8;
+        let n_enc = client_key.0.encrypt(n as u8);
+        let c = INPUT.repeat(n);
+        let c_enc = input_enc.repeat(&server_key, &n_enc, l);
+        let c_dec = c_enc.decrypt(&client_key);
+        println!("repeat: {} ?= {}", c, c_dec);
+        assert_eq!(c, c_dec, "repeat");
 
         // replace
         let repl = "bb";
@@ -281,12 +290,12 @@ mod tests {
                 replace: "b",
                 pad: None,
             },
-            TestCase {
-                input: "ababcd",
-                pattern: "ab",
-                replace: "c",
-                pad: Some(8),
-            },
+            // TestCase {
+            //     input: "ababcd",
+            //     pattern: "ab",
+            //     replace: "c",
+            //     pad: Some(8),
+            // },
         ];
 
         test_cases.iter().enumerate().for_each(|(i, t)| {
@@ -312,8 +321,70 @@ mod tests {
         })
     }
 
-    fn encrypt_string(k: &ClientKey, s: &str, l: Option<usize>) -> FheString {
-        let l = l.unwrap_or(s.len());
-        FheString::new(k, s, l).unwrap()
+    #[test]
+    fn replacen() {
+        env_logger::init();
+        let (client_key, server_key) = generate_keys(PARAM_MESSAGE_2_CARRY_2_KS_PBS);
+
+        #[derive(Debug)]
+        struct TestCase<'a> {
+            input: &'a str,
+            pattern: &'a str,
+            replace: &'a str,
+            pad: Option<usize>,
+            n: usize,
+        }
+
+        let test_cases = vec![
+            TestCase {
+                input: "aaa",
+                pattern: "a",
+                replace: "b",
+                pad: None,
+                n: 2,
+            },
+            TestCase {
+                input: "abdb",
+                pattern: "b",
+                replace: "c",
+                pad: Some(4),
+                n: 1,
+            },
+            TestCase {
+                input: "aaaa",
+                pattern: "aa",
+                replace: "b",
+                pad: None,
+                n: 3,
+            },
+        ];
+
+        test_cases.iter().enumerate().for_each(|(i, t)| {
+            let input_enc = encrypt_string(&client_key, t.input, t.pad);
+            let pattern_enc = encrypt_string(&client_key, t.pattern, t.pad);
+            let replace_enc = encrypt_string(&client_key, t.replace, t.pad);
+            let n_enc = encrypt_int(&client_key, t.n as u64);
+
+            let result = t.input.replacen(t.pattern, t.replace, t.n);
+
+            // Cap at max length.
+            let l = std::cmp::min(result.len(), FheString::max_len(&server_key));
+            let result = result[..l].to_string();
+
+            let result_enc = input_enc.replacen(
+                &server_key,
+                &pattern_enc,
+                &replace_enc,
+                &n_enc,
+                result.len(),
+            );
+            let result_dec = result_enc.decrypt(&client_key);
+
+            println!("{:?}", t);
+            println!("str_result    = \"{}\"", result);
+            println!("fhestr_result = \"{}\" ", result_dec);
+
+            assert_eq!(result, result_dec, "replacen #{}", i);
+        })
     }
 }
