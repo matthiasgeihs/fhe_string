@@ -124,23 +124,25 @@ impl FheString {
 
     /// Returns the length of `self`.
     pub fn len(&self, k: &ServerKey) -> RadixCiphertext {
-        let mut l = k.create_zero(); // Length.
-        let mut b = k.create_zero(); // String terminated.
+        // l = sum_{i in 1..self.len} (self[i-1] != 0 && self[i] == 0) * i
+        let v = self
+            .0
+            .par_windows(2)
+            .enumerate()
+            .map(|(i_sub_1, pair)| {
+                log::debug!("len: at index {i_sub_1}");
+                let self_isub1 = &pair[0];
+                let self_i = &pair[1];
+                let self_isub1_neq_0 = k.k.scalar_ne_parallelized(&self_isub1.0, 0);
+                let self_i_eq_0 = k.k.scalar_eq_parallelized(&self_i.0, 0);
+                let b = binary_and(k, &self_isub1_neq_0, &self_i_eq_0);
+                let i = i_sub_1 + 1;
+                k.k.scalar_mul_parallelized(&b, i as Uint)
+            })
+            .collect::<Vec<_>>();
 
-        // l = b ? l : (e == 0 ? i : 0)
-        // b = b || e == 0
-
-        self.0.iter().enumerate().for_each(|(i, e)| {
-            log::debug!("len: at index {i}");
-
-            let e_eq_0 = k.k.scalar_eq_parallelized(&e.0, 0);
-            let e_eq_0_mul_i = k.k.scalar_mul_parallelized(&e_eq_0, i as Uint);
-
-            l = binary_if_then_else(k, &b, &l, &e_eq_0_mul_i);
-            b = binary_or(&k, &b, &e_eq_0);
-        });
-
-        l
+        k.k.unchecked_sum_ciphertexts_vec_parallelized(v)
+            .unwrap_or(k.create_zero())
     }
 
     /// Returns whether `self` contains the string `s`. The result is an
