@@ -270,6 +270,12 @@ mod tests {
                 pad: None,
             },
             TestCase {
+                input: "abdb",
+                pattern: "b",
+                replace: "c",
+                pad: None,
+            },
+            TestCase {
                 input: "aa",
                 pattern: "aa",
                 replace: "b",
