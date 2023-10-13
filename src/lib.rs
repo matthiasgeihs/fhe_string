@@ -248,4 +248,66 @@ mod tests {
         println!("replace: {} ?= {}", c, c_dec);
         assert_eq!(c, c_dec, "replace");
     }
+
+    #[test]
+    fn replace() {
+        env_logger::init();
+        let (client_key, server_key) = generate_keys(PARAM_MESSAGE_2_CARRY_2_KS_PBS);
+
+        #[derive(Debug)]
+        struct TestCase<'a> {
+            input: &'a str,
+            pattern: &'a str,
+            replace: &'a str,
+            pad: Option<usize>,
+        }
+
+        let test_cases = vec![
+            TestCase {
+                input: "aa",
+                pattern: "a",
+                replace: "b",
+                pad: None,
+            },
+            TestCase {
+                input: "aa",
+                pattern: "aa",
+                replace: "b",
+                pad: None,
+            },
+            TestCase {
+                input: "ababcd",
+                pattern: "ab",
+                replace: "c",
+                pad: Some(8),
+            },
+        ];
+
+        test_cases.iter().enumerate().for_each(|(i, t)| {
+            let input_enc = encrypt_string(&client_key, t.input, t.pad);
+            let pattern_enc = encrypt_string(&client_key, t.pattern, t.pad);
+            let replace_enc = encrypt_string(&client_key, t.replace, t.pad);
+
+            let result = t.input.replace(t.pattern, t.replace);
+
+            // Cap at max length.
+            let l = std::cmp::min(result.len(), FheString::max_len(&server_key));
+            let result = result[..l].to_string();
+
+            let result_enc =
+                input_enc.replace(&server_key, &pattern_enc, &replace_enc, result.len());
+            let result_dec = result_enc.decrypt(&client_key);
+
+            println!("{:?}", t);
+            println!("str_result    = \"{}\"", result);
+            println!("fhestr_result = \"{}\" ", result_dec);
+
+            assert_eq!(result, result_dec, "replace #{}", i);
+        })
+    }
+
+    fn encrypt_string(k: &ClientKey, s: &str, l: Option<usize>) -> FheString {
+        let l = l.unwrap_or(s.len());
+        FheString::new(k, s, l).unwrap()
+    }
 }

@@ -131,7 +131,7 @@ impl FheString {
         // b = b || e == 0
 
         self.0.iter().enumerate().for_each(|(i, e)| {
-            println!("len: at index {i}");
+            log::debug!("len: at index {i}");
 
             let e_eq_0 = k.k.scalar_eq_parallelized(&e.0, 0);
             let e_eq_0_mul_i = k.k.scalar_mul_parallelized(&e_eq_0, i as Uint);
@@ -158,7 +158,7 @@ impl FheString {
         let mut index = zero.clone(); // Pattern index.
 
         (0..self.0.len() - 1).for_each(|i| {
-            println!("find: at index {i}");
+            log::debug!("find: at index {i}");
 
             // eq = self[i..i+s.len] == s
             let eq = self.substr_eq(k, i, s);
@@ -182,7 +182,7 @@ impl FheString {
         (0..self.0.len() - 1)
             .into_par_iter()
             .map(|i| {
-                println!("find_all: at index {i}");
+                log::debug!("find_all: at index {i}");
                 self.substr_eq(k, i, s)
             })
             .collect::<Vec<_>>()
@@ -196,7 +196,7 @@ impl FheString {
         let mut index = zero.clone(); // Pattern index.
 
         (0..self.0.len() - s.0.len() + 1).rev().for_each(|i| {
-            println!("rfind: at index {i}");
+            log::debug!("rfind: at index {i}");
 
             // eq = self[i..i+s.len] == s
             let eq = self.substr_eq(k, i, s);
@@ -224,7 +224,7 @@ impl FheString {
         let mut index = zero.clone(); // Pattern index.
 
         self.0.iter().enumerate().for_each(|(i, c)| {
-            println!("find_char: at index {i}");
+            log::debug!("find_char: at index {i}");
 
             // mi = m(self[i])
             let mi = m(k, c);
@@ -252,7 +252,7 @@ impl FheString {
         let mut index = zero.clone(); // Pattern index.
 
         self.0.iter().enumerate().rev().for_each(|(i, c)| {
-            println!("rfind_char: at index {i}");
+            log::debug!("rfind_char: at index {i}");
 
             // mi = m(self[i])
             let mi = m(k, c);
@@ -542,7 +542,7 @@ impl FheString {
             .par_iter()
             .enumerate()
             .map(|(j, aj)| {
-                println!("char_at: at index {j}");
+                log::debug!("char_at: at index {j}");
 
                 // i == j ? a[j] : 0
                 let i_eq_j = k.k.scalar_eq_parallelized(i, j as Uint);
@@ -570,7 +570,7 @@ impl FheString {
         let n_mul_self_len = k.k.mul_parallelized(n, &self_len);
         let mut v = (0..l)
             .map(|i| {
-                println!("repeat: at index {i}");
+                log::debug!("repeat: at index {i}");
 
                 // v[i] = i < n * self.len ? self[i % self.len] : 0
                 let i_radix = k.create_value(i as Uint);
@@ -616,7 +616,7 @@ impl FheString {
         let mut v = Vec::<FheAsciiChar>::new();
         let zero = k.create_zero();
         (0..l).for_each(|i| {
-            println!("replace: at index {i}");
+            log::debug!("replace: at index {i}");
 
             // c = i + n * len_diff
             let n_mul_lendiff = k.k.mul_parallelized(&n, &len_diff);
@@ -751,7 +751,7 @@ pub fn element_at(k: &ServerKey, v: &[RadixCiphertext], i: &RadixCiphertext) -> 
         .par_iter()
         .enumerate()
         .map(|(j, aj)| {
-            println!("element_at: at index {j}");
+            log::debug!("element_at: at index {j}");
 
             // i == j ? a[j] : 0
             let i_eq_j = k.k.scalar_eq_parallelized(i, j as Uint);
