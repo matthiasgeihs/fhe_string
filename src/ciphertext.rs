@@ -407,20 +407,12 @@ impl FheString {
     pub fn substr_eq(&self, k: &ServerKey, i: usize, s: &FheString) -> RadixCiphertext {
         // Extract substring.
         let a = FheString(self.0[i..].to_vec());
-
-        // Pad to same length.
-        let l = if a.0.len() > s.0.len() {
-            a.0.len()
-        } else {
-            s.0.len()
-        };
-        let a = a.pad(k, l);
-        let b = s.pad(k, l);
+        let b = s;
 
         let mut is_equal = k.create_one();
         let mut b_terminated = k.create_zero();
 
-        a.0.iter().zip(b.0).for_each(|(ai, bi)| {
+        a.0.iter().zip(&b.0).for_each(|(ai, bi)| {
             // b_terminated = b_terminated || bi == 0
             let bi_eq_0 = k.k.scalar_eq_parallelized(&bi.0, 0);
             b_terminated = binary_or(k, &b_terminated, &bi_eq_0);
