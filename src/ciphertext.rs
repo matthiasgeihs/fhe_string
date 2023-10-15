@@ -67,7 +67,7 @@ impl FheAsciiChar {
 pub struct FheString(pub(crate) Vec<FheAsciiChar>);
 
 /// Type used for scalar operations.
-type Uint = u32;
+type Uint = u64;
 
 impl FheString {
     /// Creates a new FheString from an ascii string using the provided key. The
@@ -175,7 +175,7 @@ impl FheString {
         (b, index)
     }
 
-    /// Returns a vector v of length self.len where the i-th entry is an
+    /// Returns a vector v of length self.vlen-1 where the i-th entry is an
     /// encryption of 1 if the substring of self starting from i matches s, and
     /// an encryption of 0 otherwise.
     ///
@@ -186,6 +186,47 @@ impl FheString {
             .map(|i| {
                 log::debug!("find_all: at index {i}");
                 self.substr_eq(k, i, s)
+            })
+            .collect::<Vec<_>>()
+    }
+
+    /// Similar to `find_all`, but zeros out matches that are overlapped by
+    /// preceding matches.
+    fn find_all_non_overlapping(&self, k: &ServerKey, s: &FheString) -> Vec<RadixCiphertext> {
+        let matches = self.find_all(k, s);
+        let s_len = s.len(k);
+
+        // Zero out matches that are overlapped by preceding matches.
+        /*
+        in_match = 0
+        j = 0
+        for i in 0..matches.len:
+            if in_match:
+                matches[i] = 0
+            else:
+                in_match = matches[i]
+                j = 0
+            j += 1
+            in_match = in_match && j < s.len
+         */
+        let mut in_match = k.create_zero();
+        let mut j = k.create_zero();
+        matches
+            .iter()
+            .map(|mi| {
+                // (matches[i], in_match, j) = in_match ? (0, in_match, j) : (matches[i], matches[i], 0)
+                let mi_out = binary_if_then_else(k, &in_match, &k.create_zero(), mi);
+                j = binary_if_then_else(k, &in_match, &j, &k.create_zero());
+                in_match = binary_if_then_else(k, &in_match, &in_match, mi);
+
+                // j += 1
+                k.k.scalar_add_assign_parallelized(&mut j, 1 as Uint);
+
+                // in_match = in_match && j < s.len
+                let j_lt_slen = k.k.lt_parallelized(&j, &s_len);
+                in_match = binary_and(k, &in_match, &j_lt_slen);
+
+                mi_out
             })
             .collect::<Vec<_>>()
     }
@@ -503,10 +544,41 @@ impl FheString {
     /// Returns `self[index..]`.
     pub fn substr(&self, k: &ServerKey, index: &RadixCiphertext) -> FheString {
         let v = (0..self.0.len())
+            .par_bridge()
             .map(|i| {
+                log::debug!("substr: at index {i}");
+
                 // a[i] = a[i + index]
                 let i_add_index = k.k.scalar_add_parallelized(index, i as Uint);
                 self.char_at(k, &i_add_index)
+            })
+            .collect();
+        FheString(v)
+    }
+
+    /// Returns `self[start..end]`.
+    pub fn substr_end(
+        &self,
+        k: &ServerKey,
+        start: &RadixCiphertext,
+        end: &RadixCiphertext,
+    ) -> FheString {
+        let v = (0..self.0.len())
+            .par_bridge()
+            .map(|i| {
+                log::debug!("substr_end: at index {i}");
+
+                // a[i] = i + index < end ? a[i + index] : 0
+                let i_add_index = k.k.scalar_add_parallelized(start, i as Uint);
+                let i_add_index_lt_end = k.k.lt_parallelized(&i_add_index, end);
+                let self_i_add_index = self.char_at(k, &i_add_index);
+                let ai = binary_if_then_else(
+                    k,
+                    &i_add_index_lt_end,
+                    &self_i_add_index.0,
+                    &k.create_zero(),
+                );
+                FheAsciiChar(ai)
             })
             .collect();
         FheString(v)
@@ -516,7 +588,7 @@ impl FheString {
     pub fn truncate(&self, k: &ServerKey, index: &RadixCiphertext) -> FheString {
         let v = self
             .0
-            .iter()
+            .par_iter()
             .enumerate()
             .map(|(i, c)| {
                 // a[i] = i < index ? a[i] : 0
@@ -684,6 +756,7 @@ impl FheString {
         let b_len = b.len(k);
 
         let mut v = (0..l)
+            .par_bridge()
             .map(|i| {
                 // v[i] = i < index ? a[i] : (i < index + b.len ? b[i - index] : a[i - index])
 
@@ -792,4 +865,200 @@ pub fn element_at(k: &ServerKey, v: &[RadixCiphertext], i: &RadixCiphertext) -> 
 
     k.k.unchecked_sum_ciphertexts_slice_parallelized(&v)
         .unwrap_or(k.create_zero())
+}
+
+fn playground() {
+    println!("{:?}", "xxx".split("x").collect::<Vec<_>>()); // = ["", "", "", ""]
+    println!("{:?}", "xxx".split_inclusive("x").collect::<Vec<_>>()); // = ["x", "x", "x"]
+
+    println!("{:?}", "axa".split("x").collect::<Vec<_>>()); // = ["a", "a"]
+    println!("{:?}", "axa".split_inclusive("x").collect::<Vec<_>>()); // = ["ax", "a"]
+
+    /*
+    ["", "", "", ""] = {
+        s: "xxx",
+        v: [
+            0: (1, 0),
+            1: (1, 0),
+            2: (1, 0),
+            3: (1, 0),
+        ],
+    }
+
+    ["x", "x", "x"] = {
+        s: "xxx",
+        v: [
+            0: (1, 1),
+            1: (1, 1),
+            2: (1, 1),
+            3: (0, 0),
+        ],
+    }
+
+    ["a", "a"] = {
+        s: "axa",
+        v: [
+            0: (1, 1),
+            1: (0, 0),
+            2: (1, 1),
+            3: (0, 0),
+        ],
+    }
+
+    ["ax", "a"] = {
+        s: "axa",
+        v: [
+            0: (1, 2),
+            1: (0, 0),
+            2: (1, 1),
+            3: (0, 0),
+        ],
+    }
+    */
+}
+
+/// An element of an `FheStringSliceVector`.
+struct FheStringSlice {
+    /// Defines whether this is an actual entry in a string slice vector. If
+    /// this is zero, then this is just a dummy entry.
+    is_start: RadixCiphertext,
+
+    /// The end index of the string slice, exclusive.
+    end: RadixCiphertext,
+}
+
+/// An encrypted vector of substrings of an encrypted reference string.
+pub struct FheStringSliceVector {
+    /// The reference string.
+    s: FheString,
+
+    /// The substring vector. For each character of the string, it a substring
+    /// starting from this character is contained in the vector and what the
+    /// length of that substring is.
+    ///
+    /// Formally:
+    /// for each i in 0..s.vlen: v[i] = (is_start_i, end_i)
+    v: Vec<FheStringSlice>,
+}
+
+impl FheStringSliceVector {
+    /// Returns the number of substrings contained in this vector.
+    pub fn len(&self, k: &ServerKey) -> RadixCiphertext {
+        let v = self
+            .v
+            .par_iter()
+            .map(|vi| vi.is_start.clone())
+            .collect::<Vec<_>>();
+        k.k.unchecked_sum_ciphertexts_vec_parallelized(v)
+            .unwrap_or(k.create_zero())
+    }
+
+    /// Returns `(1, self[i])`, where `self[i]` the substring at index `i`, if
+    /// it exists. Returns `(0, "")` otherwise.
+    pub fn get(&self, k: &ServerKey, i: &RadixCiphertext) -> FheOption<FheString> {
+        let mut n = k.create_zero();
+
+        let init = FheOption {
+            is_some: k.create_zero(),
+            val: FheStringSlice {
+                is_start: k.create_zero(), // This will hold the starting index.
+                end: k.create_zero(),
+            },
+        };
+
+        let slice = self.v.iter().enumerate().fold(init, |acc, (j, vi)| {
+            // acc = i == n && vi.is_start ? (j, vi.end) : acc
+            let i_eq_n = k.k.eq_parallelized(i, &n);
+            let is_some = binary_and(k, &i_eq_n, &vi.is_start);
+            let j_radix = k.create_value(j as Uint);
+            let start = binary_if_then_else(k, &is_some, &j_radix, &acc.val.is_start);
+            let end = binary_if_then_else(k, &is_some, &vi.end, &acc.val.end);
+            let acc = FheOption {
+                is_some,
+                val: FheStringSlice {
+                    is_start: start,
+                    end,
+                },
+            };
+
+            // n += 1
+            k.k.add_assign_parallelized(&mut n, &vi.is_start);
+
+            acc
+        });
+
+        let is_some = slice.is_some;
+        let val = self.s.substr_end(k, &slice.val.is_start, &slice.val.end);
+        FheOption { is_some, val }
+    }
+
+    /// Decrypts this vector.
+    pub fn decrypt(&self, k: &ClientKey) -> Vec<String> {
+        let s_dec = self.s.decrypt(k);
+        self.v
+            .iter()
+            .enumerate()
+            .filter_map(|(i, vi)| {
+                let is_start = k.0.decrypt::<Uint>(&vi.is_start);
+                match is_start {
+                    0 => None,
+                    _ => {
+                        let end = k.0.decrypt::<Uint>(&vi.end) as usize;
+                        let slice = s_dec.get(i..end).unwrap_or_default();
+                        Some(slice.to_string())
+                    }
+                }
+            })
+            .collect()
+    }
+}
+
+pub struct FheOption<T> {
+    pub is_some: RadixCiphertext,
+    pub val: T,
+}
+
+pub fn split(k: &ServerKey, s: &FheString, p: &FheString) -> FheStringSliceVector {
+    /*
+    matches = s.find_all_non_overlapping(k, p);
+    n = matches.len + 1
+    next_match = n
+    let substrings = (0..n).rev().map(|i| {
+        is_start_i = i == 0 || matches[i - p.len]
+        next_match = matches[i] ? i : next_match
+        end_i = next_match[i]
+    })
+     */
+
+    let matches = s.find_all_non_overlapping(k, p);
+    let p_len = p.len(k);
+
+    let n = s.0.len();
+    let mut next_match = k.create_value(n as Uint);
+    let elems = (0..n)
+        .rev()
+        .map(|i| {
+            // is_start_i = i == 0 || matches[i - p.len]
+            let is_start = if i == 0 {
+                k.create_one()
+            } else {
+                let i_radix = k.create_value(i as Uint);
+                let i_sub_plen = k.k.sub_parallelized(&i_radix, &p_len);
+                element_at(k, &matches, &i_sub_plen)
+            };
+
+            // next_match[i] = matches[i] ? i : next_match[i+1]
+            let i_radix = k.create_value(i as Uint);
+            next_match = binary_if_then_else(k, &matches[i], &i_radix, &next_match);
+
+            let end = next_match.clone();
+            FheStringSlice { is_start, end }
+        })
+        .rev()
+        .collect::<Vec<_>>();
+
+    FheStringSliceVector {
+        s: s.clone(),
+        v: elems,
+    }
 }

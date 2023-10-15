@@ -28,7 +28,10 @@ mod tests {
     use tfhe::{integer::RadixCiphertext, shortint::prelude::PARAM_MESSAGE_2_CARRY_2_KS_PBS};
 
     use crate::{
-        ciphertext::FheString, client_key::ClientKey, generate_keys, server_key::ServerKey,
+        ciphertext::{self, FheString},
+        client_key::ClientKey,
+        generate_keys,
+        server_key::ServerKey,
     };
 
     // const INPUT: &'static str = " defabcabc ";
@@ -36,11 +39,16 @@ mod tests {
     const INPUT: &'static str = "aaaa";
     const PATTERN: &'static str = "aa";
 
-    fn setup() -> (ClientKey, ServerKey, FheString, FheString) {
+    fn setup_enc() -> (ClientKey, ServerKey, FheString, FheString) {
         let (client_key, server_key) = generate_keys(PARAM_MESSAGE_2_CARRY_2_KS_PBS);
         let input_enc = FheString::new(&client_key, &INPUT, INPUT.len()).unwrap();
         let pattern_enc = FheString::new(&client_key, &PATTERN, PATTERN.len()).unwrap();
         (client_key, server_key, input_enc, pattern_enc)
+    }
+
+    fn setup() -> (ClientKey, ServerKey) {
+        env_logger::init();
+        generate_keys(PARAM_MESSAGE_2_CARRY_2_KS_PBS)
     }
 
     fn encrypt_string(k: &ClientKey, s: &str, l: Option<usize>) -> FheString {
@@ -54,7 +62,7 @@ mod tests {
 
     #[test]
     fn misc() {
-        let (client_key, server_key, input_enc, _) = setup();
+        let (client_key, server_key, input_enc, _) = setup_enc();
 
         // len
         let l = INPUT.len();
@@ -66,7 +74,7 @@ mod tests {
 
     #[test]
     fn compare() {
-        let (client_key, server_key, input_enc, pattern_enc) = setup();
+        let (client_key, server_key, input_enc, pattern_enc) = setup_enc();
 
         // is_empty
         let b = INPUT.is_empty() as u8;
@@ -113,7 +121,7 @@ mod tests {
 
     #[test]
     fn contains() {
-        let (client_key, server_key, input_enc, pattern_enc) = setup();
+        let (client_key, server_key, input_enc, pattern_enc) = setup_enc();
         // contains
         let b = INPUT.contains(PATTERN) as u8;
         let b_enc = input_enc.contains(&server_key, &pattern_enc);
@@ -138,7 +146,7 @@ mod tests {
 
     #[test]
     fn find() {
-        let (client_key, server_key, input_enc, pattern_enc) = setup();
+        let (client_key, server_key, input_enc, pattern_enc) = setup_enc();
 
         // find
         let opti = INPUT.find(PATTERN);
@@ -161,7 +169,7 @@ mod tests {
 
     #[test]
     fn trim() {
-        let (client_key, server_key, input_enc, _) = setup();
+        let (client_key, server_key, input_enc, _) = setup_enc();
 
         // trim
         let t = INPUT.trim();
@@ -187,7 +195,7 @@ mod tests {
 
     #[test]
     fn strip() {
-        let (client_key, server_key, input_enc, pattern_enc) = setup();
+        let (client_key, server_key, input_enc, pattern_enc) = setup_enc();
 
         // strip_prefix
         let t = INPUT.strip_prefix(PATTERN);
@@ -208,7 +216,7 @@ mod tests {
 
     #[test]
     fn case() {
-        let (client_key, server_key, input_enc, _) = setup();
+        let (client_key, server_key, input_enc, _) = setup_enc();
 
         // to_uppercase
         let t = INPUT.to_uppercase();
@@ -227,7 +235,7 @@ mod tests {
 
     #[test]
     fn modify() {
-        let (client_key, server_key, input_enc, pattern_enc) = setup();
+        let (client_key, server_key, input_enc, pattern_enc) = setup_enc();
 
         // append
         let c = INPUT.to_string() + PATTERN;
@@ -290,12 +298,12 @@ mod tests {
                 replace: "b",
                 pad: None,
             },
-            // TestCase {
-            //     input: "ababcd",
-            //     pattern: "ab",
-            //     replace: "c",
-            //     pad: Some(8),
-            // },
+            TestCase {
+                input: "ababcd",
+                pattern: "ab",
+                replace: "c",
+                pad: Some(8),
+            },
         ];
 
         test_cases.iter().enumerate().for_each(|(i, t)| {
@@ -385,6 +393,40 @@ mod tests {
             println!("fhestr_result = \"{}\" ", result_dec);
 
             assert_eq!(result, result_dec, "replacen #{}", i);
+        })
+    }
+
+    #[test]
+    fn split() {
+        let (client_key, server_key) = setup();
+
+        #[derive(Debug)]
+        struct TestCase<'a> {
+            input: &'a str,
+            pattern: &'a str,
+            pad: Option<usize>,
+        }
+
+        let test_cases = vec![TestCase {
+            input: "xxx",
+            pattern: "x",
+            pad: None,
+        }];
+
+        test_cases.iter().enumerate().for_each(|(i, t)| {
+            let input_enc = encrypt_string(&client_key, t.input, t.pad);
+            let pattern_enc = encrypt_string(&client_key, t.pattern, t.pad);
+
+            let result = t.input.split(t.pattern).collect::<Vec<_>>();
+
+            let result_enc = ciphertext::split(&server_key, &input_enc, &pattern_enc);
+            let result_dec = result_enc.decrypt(&client_key);
+
+            println!("{:?}", t);
+            println!("std = \"{:?}\"", result);
+            println!("fhe = \"{:?}\" ", result_dec);
+
+            assert_eq!(result, result_dec);
         })
     }
 }
