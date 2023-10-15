@@ -1026,7 +1026,7 @@ pub fn split(k: &ServerKey, s: &FheString, p: &FheString) -> FheStringSliceVecto
     let substrings = (0..n).rev().map(|i| {
         is_start_i = i == 0 || matches[i - p.len]
         next_match = matches[i] ? i : next_match
-        end_i = next_match[i]
+        end_i = next_match
     })
      */
 
@@ -1034,10 +1034,13 @@ pub fn split(k: &ServerKey, s: &FheString, p: &FheString) -> FheStringSliceVecto
     let p_len = p.len(k);
 
     let n = s.0.len();
-    let mut next_match = k.create_value(n as Uint);
-    let elems = (0..n)
+    let mut next_match = k.create_value((n - 1) as Uint);
+    let zero = k.create_zero();
+    let mut elems = (0..n)
         .rev()
         .map(|i| {
+            log::debug!("split: at index {i}");
+
             // is_start_i = i == 0 || matches[i - p.len]
             let is_start = if i == 0 {
                 k.create_one()
@@ -1048,14 +1051,15 @@ pub fn split(k: &ServerKey, s: &FheString, p: &FheString) -> FheStringSliceVecto
             };
 
             // next_match[i] = matches[i] ? i : next_match[i+1]
+            let matches_i = matches.get(i).unwrap_or(&zero);
             let i_radix = k.create_value(i as Uint);
-            next_match = binary_if_then_else(k, &matches[i], &i_radix, &next_match);
+            next_match = binary_if_then_else(k, matches_i, &i_radix, &next_match);
 
             let end = next_match.clone();
             FheStringSlice { is_start, end }
         })
-        .rev()
         .collect::<Vec<_>>();
+    elems.reverse();
 
     FheStringSliceVector {
         s: s.clone(),

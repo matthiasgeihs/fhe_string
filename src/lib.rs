@@ -407,11 +407,23 @@ mod tests {
             pad: Option<usize>,
         }
 
-        let test_cases = vec![TestCase {
-            input: "xxx",
-            pattern: "x",
-            pad: None,
-        }];
+        let test_cases = vec![
+            TestCase {
+                input: "xxx",
+                pattern: "x",
+                pad: None,
+            },
+            TestCase {
+                input: "axa",
+                pattern: "x",
+                pad: None,
+            },
+            TestCase {
+                input: "xxx",
+                pattern: "xx",
+                pad: None,
+            },
+        ];
 
         test_cases.iter().enumerate().for_each(|(i, t)| {
             let input_enc = encrypt_string(&client_key, t.input, t.pad);
@@ -426,7 +438,7 @@ mod tests {
             println!("std = \"{:?}\"", result);
             println!("fhe = \"{:?}\" ", result_dec);
 
-            assert_eq!(result, result_dec);
+            assert_eq!(result, result_dec, "test case {i}");
         })
     }
 }
