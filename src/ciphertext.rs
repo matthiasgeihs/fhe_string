@@ -958,8 +958,8 @@ impl FheStringSliceVector {
             .unwrap_or(k.create_zero())
     }
 
-    /// Returns `(1, self[i])`, where `self[i]` the substring at index `i`, if
-    /// it exists. Returns `(0, "")` otherwise.
+    /// Returns `(1, self[i])`, where `self[i]` is the substring at index `i`,
+    /// if it exists. Returns `(0, "")` otherwise.
     pub fn get(&self, k: &ServerKey, i: &RadixCiphertext) -> FheOption<FheString> {
         let mut n = k.create_zero();
 
@@ -1031,17 +1031,22 @@ impl FheStringSliceVector {
         let mut i = k.create_zero();
         let zero = k.create_zero();
         self.v = self
+    /// Expand the last slice to the length of the string.
+    fn expand_last(&mut self, k: &ServerKey) {
+        let mut b = k.create_one();
+        let mut v = self
             .v
             .iter()
+            .rev()
             .map(|vi| {
-                // i += v[i].is_start
-                k.k.add_assign_parallelized(&mut i, &vi.is_start);
-
-                // end = i == l && vi.is_start ? self.s.max_len : vi.end
-                let i_eq_l = k.k.eq_parallelized(&i, &l);
-                let i_eq_l_and_start = binary_and(k, &i_eq_l, &vi.is_start);
+                // end = b && vi.is_start ? self.s.max_len : vi.end
+                let b_and_start = binary_and(k, &b, &vi.is_start);
                 let max_len = k.create_value(self.s.max_len() as Uint);
-                let end = binary_if_then_else(k, &i_eq_l_and_start, &max_len, &vi.end);
+                let end = binary_if_then_else(k, &b_and_start, &max_len, &vi.end);
+
+                // b = b && !vi.is_start
+                let not_start = binary_not(k, &vi.is_start);
+                b = binary_and(k, &b, &not_start);
 
                 FheStringSlice {
                     is_start: vi.is_start.clone(),
@@ -1049,6 +1054,8 @@ impl FheStringSliceVector {
                 }
             })
             .collect::<Vec<_>>();
+        v.reverse();
+        self.v = v;
     }
 
     /// Decrypts this vector.
