@@ -1026,6 +1026,7 @@ impl FheStringSliceVector {
 
     /// Truncate the last element if it is empty.
     fn truncate_last_if_empty(&mut self, k: &ServerKey) {
+        let s_len = self.s.len(k);
         let mut b = k.create_one();
         let mut v = self
             .v
@@ -1035,8 +1036,10 @@ impl FheStringSliceVector {
             .map(|(i, vi)| {
                 log::debug!("truncate_last_if_empty: i = {}", i);
 
-                // is_empty = vi.end <= i
-                let is_empty = k.k.scalar_le_parallelized(&vi.end, i as Uint);
+                // is_empty = vi.end <= i || s.len <= i
+                let end_le_i = k.k.scalar_le_parallelized(&vi.end, i as Uint);
+                let slen_le_i = k.k.scalar_le_parallelized(&s_len, i as Uint);
+                let is_empty = binary_or(k, &end_le_i, &slen_le_i);
 
                 // is_start = b && vi.is_start && is_empty ? 0 : vi.is_start
                 let b_and_start = binary_and(k, &b, &vi.is_start);
