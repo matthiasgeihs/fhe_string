@@ -938,12 +938,11 @@ pub struct FheStringSliceVector {
     /// The reference string.
     s: FheString,
 
-    /// The substring vector. For each character of the string, it a substring
-    /// starting from this character is contained in the vector and what the
-    /// length of that substring is.
+    /// The substring vector. For each character of the string, it indicates
+    /// whether a substring starting from this character is contained in the
+    /// vector and what the length of that substring is.
     ///
-    /// Formally:
-    /// for each i in 0..s.vlen: v[i] = (is_start_i, end_i)
+    /// Formally: for each i in 0..s.vlen: v[i] = (is_start_i, end_i)
     v: Vec<FheStringSlice>,
 }
 
@@ -998,6 +997,60 @@ impl FheStringSliceVector {
         FheOption { is_some, val }
     }
 
+    /// Truncates `self` starting from index `i`.
+    pub fn truncate(&mut self, k: &ServerKey, i: &RadixCiphertext) {
+        /*
+        n = 0
+        for i in v.len:
+            v[i] = v[i] if n < i else (0, 0)
+            n += v[i].is_start
+        */
+        let mut n = k.create_zero();
+        let zero = k.create_zero();
+        self.v = self
+            .v
+            .iter()
+            .map(|vi| {
+                // n < i
+                let n_lt_i = k.k.lt_parallelized(&n, &i);
+                let is_start = binary_if_then_else(k, &n_lt_i, &vi.is_start, &zero);
+                let end = binary_if_then_else(k, &n_lt_i, &vi.end, &zero);
+
+                // n += v[i].is_start
+                k.k.add_assign_parallelized(&mut n, &vi.is_start);
+
+                FheStringSlice { is_start, end }
+            })
+            .collect::<Vec<_>>();
+    }
+
+    /// Expand the last slice to the length of the string.
+    pub fn expand_last(&mut self, k: &ServerKey) {
+        let l = self.len(k);
+
+        let mut i = k.create_zero();
+        let zero = k.create_zero();
+        self.v = self
+            .v
+            .iter()
+            .map(|vi| {
+                // i += v[i].is_start
+                k.k.add_assign_parallelized(&mut i, &vi.is_start);
+
+                // end = i == l && vi.is_start ? self.s.max_len : vi.end
+                let i_eq_l = k.k.eq_parallelized(&i, &l);
+                let i_eq_l_and_start = binary_and(k, &i_eq_l, &vi.is_start);
+                let max_len = k.create_value(self.s.max_len() as Uint);
+                let end = binary_if_then_else(k, &i_eq_l_and_start, &max_len, &vi.end);
+
+                FheStringSlice {
+                    is_start: vi.is_start.clone(),
+                    end,
+                }
+            })
+            .collect::<Vec<_>>();
+    }
+
     /// Decrypts this vector.
     pub fn decrypt(&self, k: &ClientKey) -> Vec<String> {
         let s_dec = self.s.decrypt(k);
@@ -1024,6 +1077,7 @@ pub struct FheOption<T> {
     pub val: T,
 }
 
+/// Splits the string `s` at each occurrence of `p` into a vector of substrings.
 pub fn split(k: &ServerKey, s: &FheString, p: &FheString) -> FheStringSliceVector {
     /*
     matches = s.find_all_non_overlapping(k, p);
@@ -1071,4 +1125,18 @@ pub fn split(k: &ServerKey, s: &FheString, p: &FheString) -> FheStringSliceVecto
         s: s.clone(),
         v: elems,
     }
+}
+
+/// Splits the string `s` at each occurrence of `p` into a vector of substrings
+/// of at most length `n`.
+pub fn splitn(
+    k: &ServerKey,
+    s: &FheString,
+    n: &RadixCiphertext,
+    p: &FheString,
+) -> FheStringSliceVector {
+    let mut v = split(k, s, p);
+    v.truncate(k, n);
+    v.expand_last(k);
+    v
 }
