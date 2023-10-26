@@ -1024,13 +1024,40 @@ impl FheStringSliceVector {
             .collect::<Vec<_>>();
     }
 
-    /// Expand the last slice to the length of the string.
-    pub fn expand_last(&mut self, k: &ServerKey) {
-        let l = self.len(k);
+    /// Truncate the last element if it is empty.
+    fn truncate_last_if_empty(&mut self, k: &ServerKey) {
+        let mut b = k.create_one();
+        let mut v = self
+            .v
+            .iter()
+            .enumerate()
+            .rev()
+            .map(|(i, vi)| {
+                log::debug!("truncate_last_if_empty: i = {}", i);
 
-        let mut i = k.create_zero();
-        let zero = k.create_zero();
-        self.v = self
+                // is_empty = vi.end <= i
+                let is_empty = k.k.scalar_le_parallelized(&vi.end, i as Uint);
+
+                // is_start = b && vi.is_start && is_empty ? 0 : vi.is_start
+                let b_and_start = binary_and(k, &b, &vi.is_start);
+                let b_and_start_and_empty = binary_and(k, &b_and_start, &is_empty);
+                let is_start =
+                    binary_if_then_else(k, &b_and_start_and_empty, &k.create_zero(), &vi.is_start);
+
+                // b = b && !vi.is_start
+                let not_start = binary_not(k, &vi.is_start);
+                b = binary_and(k, &b, &not_start);
+
+                FheStringSlice {
+                    is_start,
+                    end: vi.end.clone(),
+                }
+            })
+            .collect::<Vec<_>>();
+        v.reverse();
+        self.v = v;
+    }
+
     /// Expand the last slice to the length of the string.
     fn expand_last(&mut self, k: &ServerKey) {
         let mut b = k.create_one();
@@ -1145,5 +1172,13 @@ pub fn splitn(
     let mut v = split(k, s, p);
     v.truncate(k, n);
     v.expand_last(k);
+    v
+}
+
+/// Splits the string `s` at each occurrence of `p` into a vector of substrings
+/// where the last substring is skipped if empty.
+pub fn split_terminator(k: &ServerKey, s: &FheString, p: &FheString) -> FheStringSliceVector {
+    let mut v = split(k, s, p);
+    v.truncate_last_if_empty(k);
     v
 }
