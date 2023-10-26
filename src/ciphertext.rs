@@ -1114,15 +1114,21 @@ pub struct FheOption<T> {
     pub val: T,
 }
 
-/// Splits the string `s` at each occurrence of `p` into a vector of substrings.
-pub fn split(k: &ServerKey, s: &FheString, p: &FheString) -> FheStringSliceVector {
+/// Splits the string `s` at each occurrence of `p` into a vector of substrings
+/// where the pattern is optionally included at the end of each substring.
+pub fn split_inclusive_opt(
+    k: &ServerKey,
+    s: &FheString,
+    p: &FheString,
+    inclusive: bool,
+) -> FheStringSliceVector {
     /*
     matches = s.find_all_non_overlapping(k, p);
     n = matches.len + 1
     next_match = n
     let substrings = (0..n).rev().map(|i| {
         is_start_i = i == 0 || matches[i - p.len]
-        next_match = matches[i] ? i : next_match
+        next_match = matches[i] ? i + (inclusive ? p.len : 0) : next_match
         end_i = next_match
     })
      */
@@ -1136,7 +1142,7 @@ pub fn split(k: &ServerKey, s: &FheString, p: &FheString) -> FheStringSliceVecto
     let mut elems = (0..n)
         .rev()
         .map(|i| {
-            log::debug!("split: at index {i}");
+            log::debug!("split_inclusive_opt: at index {i}");
 
             // is_start_i = i == 0 || matches[i - p.len]
             let is_start = if i == 0 {
@@ -1147,10 +1153,16 @@ pub fn split(k: &ServerKey, s: &FheString, p: &FheString) -> FheStringSliceVecto
                 element_at(k, &matches, &i_sub_plen)
             };
 
-            // next_match[i] = matches[i] ? i : next_match[i+1]
+            // next_match_target = i + (inclusive ? p.len : 0)
+            let next_match_target = if inclusive {
+                k.k.scalar_add_parallelized(&p_len, i as Uint)
+            } else {
+                k.create_value(i as Uint)
+            };
+
+            // next_match[i] = matches[i] ? next_match_target : next_match[i+1]
             let matches_i = matches.get(i).unwrap_or(&zero);
-            let i_radix = k.create_value(i as Uint);
-            next_match = binary_if_then_else(k, matches_i, &i_radix, &next_match);
+            next_match = binary_if_then_else(k, matches_i, &next_match_target, &next_match);
 
             let end = next_match.clone();
             FheStringSlice { is_start, end }
@@ -1158,10 +1170,28 @@ pub fn split(k: &ServerKey, s: &FheString, p: &FheString) -> FheStringSliceVecto
         .collect::<Vec<_>>();
     elems.reverse();
 
-    FheStringSliceVector {
+    let mut v = FheStringSliceVector {
         s: s.clone(),
         v: elems,
+    };
+
+    // If inclusive, remove last element if empty.
+    if inclusive {
+        v.truncate_last_if_empty(k);
     }
+
+    v
+}
+
+/// Splits the string `s` at each occurrence of `p` into a vector of substrings.
+pub fn split(k: &ServerKey, s: &FheString, p: &FheString) -> FheStringSliceVector {
+    split_inclusive_opt(k, s, p, false)
+}
+
+/// Splits the string `s` at each occurrence of `p` into a vector of substrings
+/// where the pattern is included at the end of each substring.
+pub fn split_inclusive(k: &ServerKey, s: &FheString, p: &FheString) -> FheStringSliceVector {
+    split_inclusive_opt(k, s, p, true)
 }
 
 /// Splits the string `s` at each occurrence of `p` into a vector of substrings

@@ -538,4 +538,50 @@ mod tests {
             assert_eq!(result, result_dec, "test case {i}");
         })
     }
+
+    #[test]
+    fn split_inclusive() {
+        let (client_key, server_key) = setup();
+
+        #[derive(Debug)]
+        struct TestCase<'a> {
+            input: &'a str,
+            pattern: &'a str,
+            pad: Option<usize>,
+        }
+
+        let test_cases = vec![
+            TestCase {
+                input: "xxx",
+                pattern: "x",
+                pad: None,
+            },
+            TestCase {
+                input: "axa",
+                pattern: "x",
+                pad: None,
+            },
+            TestCase {
+                input: "xxx",
+                pattern: "xx",
+                pad: None,
+            },
+        ];
+
+        test_cases.iter().enumerate().for_each(|(i, t)| {
+            let input_enc = encrypt_string(&client_key, t.input, t.pad);
+            let pattern_enc = encrypt_string(&client_key, t.pattern, t.pad);
+
+            let result = t.input.split_inclusive(t.pattern).collect::<Vec<_>>();
+
+            let result_enc = ciphertext::split_inclusive(&server_key, &input_enc, &pattern_enc);
+            let result_dec = result_enc.decrypt(&client_key);
+
+            println!("{:?}", t);
+            println!("std = \"{:?}\"", result);
+            println!("fhe = \"{:?}\" ", result_dec);
+
+            assert_eq!(result, result_dec, "test case {i}");
+        })
+    }
 }
