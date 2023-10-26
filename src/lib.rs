@@ -314,7 +314,7 @@ mod tests {
             let result = t.input.replace(t.pattern, t.replace);
 
             // Cap at max length.
-            let l = std::cmp::min(result.len(), FheString::max_len(&server_key));
+            let l = std::cmp::min(result.len(), FheString::max_len_with_key(&server_key));
             let result = result[..l].to_string();
 
             let result_enc =
@@ -376,7 +376,7 @@ mod tests {
             let result = t.input.replacen(t.pattern, t.replace, t.n);
 
             // Cap at max length.
-            let l = std::cmp::min(result.len(), FheString::max_len(&server_key));
+            let l = std::cmp::min(result.len(), FheString::max_len_with_key(&server_key));
             let result = result[..l].to_string();
 
             let result_enc = input_enc.replacen(

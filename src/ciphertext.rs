@@ -84,9 +84,9 @@ impl FheString {
             return Err("string is not ascii".into());
         } else if s.chars().find(|&x| x as u8 == 0).is_some() {
             return Err("string contains 0 char".into());
-        } else if s.len() > Self::max_len(k) {
+        } else if s.len() > Self::max_len_with_key(k) {
             return Err("string length exceeds maximum length".into());
-        } else if l > Self::max_len(k) {
+        } else if l > Self::max_len_with_key(k) {
             return Err("pad length exceeds maximum length".into());
         } else if l < s.len() {
             return Err("string length exceeds pad length".into());
@@ -143,6 +143,12 @@ impl FheString {
 
         k.k.unchecked_sum_ciphertexts_vec_parallelized(v)
             .unwrap_or(k.create_zero())
+    }
+
+    /// Returns an upper bound on the length of `self`.
+    pub fn max_len(&self) -> usize {
+        // Substract 1 because strings are 0-terminated.
+        self.0.len() - 1
     }
 
     /// Returns whether `self` contains the string `s`. The result is an
@@ -631,7 +637,7 @@ impl FheString {
 
     /// Returns `self` repeated `n` times up to length `l`.
     pub fn repeat(&self, k: &ServerKey, n: &RadixCiphertext, l: usize) -> FheString {
-        let l = std::cmp::min(l, Self::max_len(k));
+        let l = std::cmp::min(l, Self::max_len_with_key(k));
         let self_len = self.len(k);
         let n_mul_self_len = k.k.mul_parallelized(n, &self_len);
         let mut v = (0..l)
@@ -687,7 +693,7 @@ impl FheString {
         n_max: Option<&RadixCiphertext>,
         l: usize,
     ) -> FheString {
-        let l = std::cmp::min(l, Self::max_len(k));
+        let l = std::cmp::min(l, Self::max_len_with_key(k));
 
         // found[i] = self.substr_eq(i, p)
         let found = self.find_all(k, p);
@@ -752,7 +758,7 @@ impl FheString {
     pub fn insert(&self, k: &ServerKey, index: &RadixCiphertext, s: &FheString) -> FheString {
         let a = self;
         let b = s;
-        let l = std::cmp::min(a.0.len() + b.0.len() - 2, Self::max_len(k));
+        let l = std::cmp::min(a.0.len() + b.0.len() - 2, Self::max_len_with_key(k));
         let b_len = b.len(k);
 
         let mut v = (0..l)
@@ -791,8 +797,8 @@ impl FheString {
         FheString(v)
     }
 
-    /// Returns the maximum length of an FheString.
-    pub fn max_len<K: Key>(k: &K) -> usize {
+    /// Returns the maximum length of an FheString when using key `k`.
+    pub fn max_len_with_key<K: Key>(k: &K) -> usize {
         k.max_int() - 1
     }
 
@@ -801,7 +807,7 @@ impl FheString {
     /// # Panics
     /// Panics if l exceeds the maximum length.
     fn pad(&self, k: &ServerKey, l: usize) -> Self {
-        if l > Self::max_len(k) {
+        if l > Self::max_len_with_key(k) {
             panic!("pad length exceeds maximum length")
         }
 
