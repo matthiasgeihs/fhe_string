@@ -265,6 +265,43 @@ impl FheString {
             .collect::<Vec<_>>()
     }
 
+    /// Similar to `find_all`, but zeros out matches that are overlapped by
+    /// preceding matches, in reverse order.
+    fn rfind_all_non_overlapping(&self, k: &ServerKey, s: &FheString) -> Vec<RadixCiphertext> {
+        let matches = self.find_all(k, s);
+        let s_len = s.len(k);
+
+        // Zero out matches that are overlapped by preceding matches.
+        /*
+        j = 1
+        for i in (0..matches.len).reverse():
+            if j < s.len:
+                matches[i] = 0
+            else:
+                j = matches[i] ? 0 : j
+            j += 1
+         */
+        let zero = k.create_zero();
+        let mut j = k.create_one();
+        matches
+            .iter()
+            .map(|mi| {
+                // m[i] = j < s.len ? 0 : m[i]
+                let j_lt_slen = k.k.lt_parallelized(&j, &s_len);
+                let mi = binary_if_then_else(k, &j_lt_slen, &zero, mi);
+
+                // j = j >= s.len && m[i] ? 0 : j
+                let j_lt_slen_and_mi = binary_and(k, &j_lt_slen, &mi);
+                j = binary_if_then_else(k, &j_lt_slen_and_mi, &zero, &j);
+
+                // j += 1
+                k.k.scalar_add_assign_parallelized(&mut j, 1 as Uint);
+
+                mi
+            })
+            .collect::<Vec<_>>()
+    }
+
     /// If `self` contains `s`, returns (1, i), where i is the index of the
     /// last occurrence of `s`. Otherwise, returns (0, 0).
     pub fn rfind(&self, k: &ServerKey, s: &FheString) -> (RadixCiphertext, RadixCiphertext) {
@@ -951,6 +988,9 @@ pub struct FheStringSliceVector {
     ///
     /// Formally: for each i in 0..s.vlen: v[i] = (is_start_i, end_i)
     v: Vec<FheStringSlice>,
+
+    // Indicates whether elements are indexed in reverse order.
+    reverse: bool,
 }
 
 impl FheStringSliceVector {
@@ -965,8 +1005,7 @@ impl FheStringSliceVector {
             .unwrap_or(k.create_zero())
     }
 
-    /// Returns `(1, self[i])`, where `self[i]` is the substring at index `i`,
-    /// if it exists. Returns `(0, "")` otherwise.
+    /// Returns the substring stored at index `i`, if existent.
     pub fn get(&self, k: &ServerKey, i: &RadixCiphertext) -> FheOption<FheString> {
         let mut n = k.create_zero();
 
@@ -978,11 +1017,15 @@ impl FheStringSliceVector {
             },
         };
 
-        let slice = self.v.iter().enumerate().fold(init, |acc, (j, vi)| {
+        let mut iter_items = self.v.iter().enumerate().collect::<Vec<_>>();
+        if self.reverse {
+            iter_items.reverse()
+        }
+        let slice = iter_items.iter().fold(init, |acc, (j, vi)| {
             // acc = i == n && vi.is_start ? (j, vi.end) : acc
             let i_eq_n = k.k.eq_parallelized(i, &n);
             let is_some = binary_and(k, &i_eq_n, &vi.is_start);
-            let j_radix = k.create_value(j as Uint);
+            let j_radix = k.create_value(*j as Uint);
             let start = binary_if_then_else(k, &is_some, &j_radix, &acc.val.is_start);
             let end = binary_if_then_else(k, &is_some, &vi.end, &acc.val.end);
             let acc = FheOption {
@@ -999,13 +1042,17 @@ impl FheStringSliceVector {
             acc
         });
 
-        let is_some = slice.is_some;
         let val = self.s.substr_end(k, &slice.val.is_start, &slice.val.end);
-        FheOption { is_some, val }
+        FheOption {
+            is_some: slice.is_some,
+            val,
+        }
     }
 
     /// Truncates `self` starting from index `i`.
     pub fn truncate(&mut self, k: &ServerKey, i: &RadixCiphertext) {
+        assert!(!self.reverse, "does not support reverse indexing");
+
         /*
         n = 0
         for i in v.len:
@@ -1033,6 +1080,8 @@ impl FheStringSliceVector {
 
     /// Truncate the last element if it is empty.
     fn truncate_last_if_empty(&mut self, k: &ServerKey) {
+        assert!(!self.reverse, "does not support reverse indexing");
+
         let s_len = self.s.len(k);
         let mut b = k.create_one();
         let mut v = self
@@ -1070,6 +1119,8 @@ impl FheStringSliceVector {
 
     /// Expand the last slice to the length of the string.
     fn expand_last(&mut self, k: &ServerKey) {
+        assert!(!self.reverse, "does not support reverse indexing");
+
         let mut b = k.create_one();
         let mut v = self
             .v
@@ -1098,7 +1149,8 @@ impl FheStringSliceVector {
     /// Decrypts this vector.
     pub fn decrypt(&self, k: &ClientKey) -> Vec<String> {
         let s_dec = self.s.decrypt(k);
-        self.v
+        let mut v = self
+            .v
             .iter()
             .enumerate()
             .filter_map(|(i, vi)| {
@@ -1112,7 +1164,16 @@ impl FheStringSliceVector {
                     }
                 }
             })
-            .collect()
+            .collect::<Vec<_>>();
+        if self.reverse {
+            v.reverse();
+        }
+        v
+    }
+
+    /// Reverses the order of the elements.
+    pub fn reverse(&mut self) {
+        self.reverse = !self.reverse;
     }
 }
 
@@ -1121,18 +1182,20 @@ pub struct FheOption<T> {
     pub val: T,
 }
 
-/// Splits the string `s` at each occurrence of `p` into a vector of substrings
-/// where the pattern is optionally included at the end of each substring.
-pub fn split_inclusive_opt(
+/// Splits the string `s` at each occurrence of `p` into a vector of substrings.
+/// If `inclusive`, then the pattern is included at the end of each substring.
+/// If `reverse`, then the string is searched in reverse direction.
+fn split_opt(
     k: &ServerKey,
     s: &FheString,
     p: &FheString,
     inclusive: bool,
+    reverse: bool,
 ) -> FheStringSliceVector {
     /*
     matches = s.find_all_non_overlapping(k, p);
-    n = matches.len + 1
-    next_match = n
+    n = s.max_len + 1
+    next_match = s.max_len
     let substrings = (0..n).rev().map(|i| {
         is_start_i = i == 0 || matches[i - p.len]
         next_match = matches[i] ? i + (inclusive ? p.len : 0) : next_match
@@ -1140,16 +1203,20 @@ pub fn split_inclusive_opt(
     })
      */
 
-    let matches = s.find_all_non_overlapping(k, p);
+    let matches = if reverse {
+        s.rfind_all_non_overlapping(k, p)
+    } else {
+        s.find_all_non_overlapping(k, p)
+    };
     let p_len = p.len(k);
 
-    let n = s.0.len();
-    let mut next_match = k.create_value((n - 1) as Uint);
+    let n = s.max_len() + 1; // Maximum number of entries.
+    let mut next_match = k.create_value(s.max_len() as Uint);
     let zero = k.create_zero();
     let mut elems = (0..n)
         .rev()
         .map(|i| {
-            log::debug!("split_inclusive_opt: at index {i}");
+            log::debug!("split_opt: at index {i}");
 
             // is_start_i = i == 0 || matches[i - p.len]
             let is_start = if i == 0 {
@@ -1180,6 +1247,7 @@ pub fn split_inclusive_opt(
     let mut v = FheStringSliceVector {
         s: s.clone(),
         v: elems,
+        reverse: false,
     };
 
     // If inclusive, remove last element if empty.
@@ -1192,13 +1260,20 @@ pub fn split_inclusive_opt(
 
 /// Splits the string `s` at each occurrence of `p` into a vector of substrings.
 pub fn split(k: &ServerKey, s: &FheString, p: &FheString) -> FheStringSliceVector {
-    split_inclusive_opt(k, s, p, false)
+    split_opt(k, s, p, false, false)
+}
+
+/// Splits the string `s` at each occurrence of `p` into a vector of substrings and returns the elements in reverse order.
+pub fn rsplit(k: &ServerKey, s: &FheString, p: &FheString) -> FheStringSliceVector {
+    let mut v = split_opt(k, s, p, false, true);
+    v.reverse();
+    v
 }
 
 /// Splits the string `s` at each occurrence of `p` into a vector of substrings
 /// where the pattern is included at the end of each substring.
 pub fn split_inclusive(k: &ServerKey, s: &FheString, p: &FheString) -> FheStringSliceVector {
-    split_inclusive_opt(k, s, p, true)
+    split_opt(k, s, p, true, false)
 }
 
 /// Splits the string `s` at each occurrence of `p` into a vector of substrings
@@ -1272,5 +1347,9 @@ pub fn split_ascii_whitespace(k: &ServerKey, s: &FheString) -> FheStringSliceVec
         })
         .collect::<Vec<_>>();
 
-    FheStringSliceVector { s: s.clone(), v }
+    FheStringSliceVector {
+        s: s.clone(),
+        v,
+        reverse: false,
+    }
 }
