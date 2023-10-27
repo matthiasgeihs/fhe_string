@@ -584,4 +584,45 @@ mod tests {
             assert_eq!(result, result_dec, "test case {i}");
         })
     }
+
+    #[test]
+    fn split_ascii_whitespace() {
+        let (client_key, server_key) = setup();
+
+        #[derive(Debug)]
+        struct TestCase<'a> {
+            input: &'a str,
+            pad: Option<usize>,
+        }
+
+        let test_cases = vec![
+            TestCase {
+                input: " x x x ",
+                pad: None,
+            },
+            TestCase {
+                input: "ab cd ed",
+                pad: None,
+            },
+            TestCase {
+                input: "ab",
+                pad: None,
+            },
+        ];
+
+        test_cases.iter().enumerate().for_each(|(i, t)| {
+            let input_enc = encrypt_string(&client_key, t.input, t.pad);
+
+            let result = t.input.split_ascii_whitespace().collect::<Vec<_>>();
+
+            let result_enc = ciphertext::split_ascii_whitespace(&server_key, &input_enc);
+            let result_dec = result_enc.decrypt(&client_key);
+
+            println!("{:?}", t);
+            println!("std = \"{:?}\"", result);
+            println!("fhe = \"{:?}\" ", result_dec);
+
+            assert_eq!(result, result_dec, "test case {i}");
+        })
+    }
 }

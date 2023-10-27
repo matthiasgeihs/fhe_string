@@ -70,6 +70,9 @@ pub struct FheString(pub(crate) Vec<FheAsciiChar>);
 type Uint = u64;
 
 impl FheString {
+    /// ASCII value of the string termination character.
+    const TERMINATOR: Uint = 0;
+
     /// Creates a new FheString from an ascii string using the provided key. The
     /// input string must only contain ascii characters and must not contain any
     /// zero values. The result is padded to the specified length.
@@ -181,7 +184,7 @@ impl FheString {
         (b, index)
     }
 
-    /// Returns a vector v of length self.vlen-1 where the i-th entry is an
+    /// Returns a vector v of length self.max_len where the i-th entry is an
     /// encryption of 1 if the substring of self starting from i matches s, and
     /// an encryption of 0 otherwise.
     ///
@@ -193,6 +196,31 @@ impl FheString {
                 log::debug!("find_all: at index {i}");
                 self.substr_eq(k, i, s)
             })
+            .collect::<Vec<_>>()
+    }
+
+    /// Returns a vector v of length self.max_len where `v[i] = p(self[i])`.
+    ///
+    /// `p` is expected to return an encryption of either 0 or 1.
+    pub fn find_all_pred_unchecked(
+        &self,
+        k: &ServerKey,
+        p: fn(&ServerKey, &FheAsciiChar) -> RadixCiphertext,
+    ) -> Vec<RadixCiphertext> {
+        self.0.par_iter().map(|c| p(k, c)).collect::<Vec<_>>()
+    }
+
+    /// Returns a vector v of length self.max_len where `v[i]` contains the
+    /// index `j >= i` for which `p(v[j]) == 1`.
+    pub fn find_all_next_pred_unchecked(
+        &self,
+        k: &ServerKey,
+        p: fn(&ServerKey, &FheAsciiChar) -> RadixCiphertext,
+    ) -> Vec<FheOption<RadixCiphertext>> {
+        self.0
+            .par_iter()
+            .enumerate()
+            .map(|(i, _)| self.find_next_pred_unchecked(k, i, p))
             .collect::<Vec<_>>()
     }
 
@@ -260,32 +288,51 @@ impl FheString {
         (b, index)
     }
 
-    /// Searches `self` for a match with `m`. Returns (1, i) if a match was
-    /// found, where i is the index of the first match. Otherwise, returns (0,
-    /// 0).
-    pub fn find_char(
+    /// Searches `self` for the first index `j >= i` with `p(self[j]) == 1`.
+    ///
+    /// Expects that `p` returns an encryption of either 0 or 1.
+    pub fn find_next_pred_unchecked(
         &self,
         k: &ServerKey,
-        m: fn(&ServerKey, &FheAsciiChar) -> RadixCiphertext,
-    ) -> (RadixCiphertext, RadixCiphertext) {
+        i: usize,
+        p: fn(&ServerKey, &FheAsciiChar) -> RadixCiphertext,
+    ) -> FheOption<RadixCiphertext> {
         let zero = k.create_zero();
         let mut b = zero.clone(); // Pattern contained.
         let mut index = zero.clone(); // Pattern index.
 
-        self.0.iter().enumerate().for_each(|(i, c)| {
-            log::debug!("find_char: at index {i}");
+        self.0
+            .get(i..)
+            .unwrap_or_default()
+            .iter()
+            .enumerate()
+            .for_each(|(j, c)| {
+                let j = j + i;
+                log::debug!("find_next_pred: at index {j}");
 
-            // mi = m(self[i])
-            let mi = m(k, c);
+                // pj = p(self[j])
+                let pj = p(k, c);
 
-            // index = b ? index : (mi ? i : 0)
-            let mi_mul_i = k.k.scalar_mul_parallelized(&mi, i as Uint);
-            index = binary_if_then_else(k, &b, &index, &mi_mul_i);
+                // index = b ? index : (pj ? j : 0)
+                let pj_mul_j = k.k.scalar_mul_parallelized(&pj, j as Uint);
+                index = binary_if_then_else(k, &b, &index, &pj_mul_j);
 
-            // b = b || mi
-            b = binary_or(&k, &b, &mi);
-        });
-        (b, index)
+                // b = b || pi
+                b = binary_or(&k, &b, &pj);
+            });
+        FheOption {
+            is_some: b,
+            val: index,
+        }
+    }
+
+    /// Searches `self` for the first index `i` with `p(self[i]) == 1`.
+    pub fn find_pred_unchecked(
+        &self,
+        k: &ServerKey,
+        p: fn(&ServerKey, &FheAsciiChar) -> RadixCiphertext,
+    ) -> FheOption<RadixCiphertext> {
+        self.find_next_pred_unchecked(k, 0, p)
     }
 
     /// Searches `self` for a match with `m` in reverse direction. Returns (1,
@@ -477,11 +524,12 @@ impl FheString {
     /// Returns `self[i..]` where `i` is the index of the first non-whitespace
     /// character.
     pub fn trim_start(&self, k: &ServerKey) -> FheString {
-        let (_, i) = self.find_char(k, |k, c| {
+        let i_opt = self.find_pred_unchecked(k, |k, c| {
             let is_whitespace = c.is_whitespace(k);
             binary_not(k, &is_whitespace)
         });
 
+        let i = binary_if_then_else(k, &i_opt.is_some, &i_opt.val, &k.create_zero());
         self.substr(k, &i)
     }
 
@@ -873,56 +921,6 @@ pub fn element_at(k: &ServerKey, v: &[RadixCiphertext], i: &RadixCiphertext) -> 
         .unwrap_or(k.create_zero())
 }
 
-fn playground() {
-    println!("{:?}", "xxx".split("x").collect::<Vec<_>>()); // = ["", "", "", ""]
-    println!("{:?}", "xxx".split_inclusive("x").collect::<Vec<_>>()); // = ["x", "x", "x"]
-
-    println!("{:?}", "axa".split("x").collect::<Vec<_>>()); // = ["a", "a"]
-    println!("{:?}", "axa".split_inclusive("x").collect::<Vec<_>>()); // = ["ax", "a"]
-
-    /*
-    ["", "", "", ""] = {
-        s: "xxx",
-        v: [
-            0: (1, 0),
-            1: (1, 0),
-            2: (1, 0),
-            3: (1, 0),
-        ],
-    }
-
-    ["x", "x", "x"] = {
-        s: "xxx",
-        v: [
-            0: (1, 1),
-            1: (1, 1),
-            2: (1, 1),
-            3: (0, 0),
-        ],
-    }
-
-    ["a", "a"] = {
-        s: "axa",
-        v: [
-            0: (1, 1),
-            1: (0, 0),
-            2: (1, 1),
-            3: (0, 0),
-        ],
-    }
-
-    ["ax", "a"] = {
-        s: "axa",
-        v: [
-            0: (1, 2),
-            1: (0, 0),
-            2: (1, 1),
-            3: (0, 0),
-        ],
-    }
-    */
-}
-
 /// An element of an `FheStringSliceVector`.
 struct FheStringSlice {
     /// Defines whether this is an actual entry in a string slice vector. If
@@ -1214,4 +1212,56 @@ pub fn split_terminator(k: &ServerKey, s: &FheString, p: &FheString) -> FheStrin
     let mut v = split(k, s, p);
     v.truncate_last_if_empty(k);
     v
+}
+
+/// Splits the string `s` at each occurrence of ascii whitespace into a vector
+/// of substrings.
+pub fn split_ascii_whitespace(k: &ServerKey, s: &FheString) -> FheStringSliceVector {
+    /*
+    whitespace = s.find_all_whitespace()
+    v = s.0.map(|i, si| {
+        is_start = !whitespace[i] && (i == 0 || whitespace[i-1]);
+        end = s.index_of_next_white_space_or_max_len(i+1);
+        (is_start, end)
+    });
+     */
+    let is_whitespace = |k: &ServerKey, c: &FheAsciiChar| {
+        let w = c.is_whitespace(k);
+        // Also check for string termination character.
+        let z = k.k.scalar_eq_parallelized(&c.0, FheString::TERMINATOR);
+        binary_or(k, &w, &z)
+    };
+    let whitespace = s.find_all_pred_unchecked(k, is_whitespace);
+    let next_whitespace = s.find_all_next_pred_unchecked(k, is_whitespace);
+
+    let zero = k.create_zero();
+    let opt_default = FheOption {
+        is_some: zero.clone(),
+        val: zero.clone(),
+    };
+
+    let v = s
+        .0
+        .par_iter()
+        .enumerate()
+        .map(|(i, _)| {
+            // is_start = !whitespace[i] && (i == 0 || whitespace[i-1]);
+            let not_whitespace = binary_not(k, &whitespace[i]);
+            let i_eq_0_or_prev_whitespace = if i == 0 {
+                k.create_one()
+            } else {
+                whitespace[i - 1].clone()
+            };
+            let is_start = binary_and(k, &not_whitespace, &i_eq_0_or_prev_whitespace);
+
+            // end = s.index_of_next_white_space_or_max_len(i+1);
+            let index_of_next = next_whitespace.get(i + 1).unwrap_or(&opt_default);
+            let max_len = k.create_value(s.max_len() as Uint);
+            let end = binary_if_then_else(k, &index_of_next.is_some, &index_of_next.val, &max_len);
+
+            FheStringSlice { is_start, end }
+        })
+        .collect::<Vec<_>>();
+
+    FheStringSliceVector { s: s.clone(), v }
 }
