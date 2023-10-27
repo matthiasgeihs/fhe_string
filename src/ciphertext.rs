@@ -1080,21 +1080,24 @@ impl FheStringSliceVector {
 
     /// Truncate the last element if it is empty.
     fn truncate_last_if_empty(&mut self, k: &ServerKey) {
-        assert!(!self.reverse, "does not support reverse indexing");
-
         let s_len = self.s.len(k);
         let mut b = k.create_one();
-        let mut v = self
-            .v
+
+        let iter_items = self.v.iter().enumerate();
+        let iter_items = if self.reverse {
+            iter_items.collect::<Vec<_>>()
+        } else {
+            iter_items.rev().collect::<Vec<_>>()
+        };
+
+        let mut v = iter_items
             .iter()
-            .enumerate()
-            .rev()
             .map(|(i, vi)| {
                 log::debug!("truncate_last_if_empty: i = {}", i);
 
                 // is_empty = vi.end <= i || s.len <= i
-                let end_le_i = k.k.scalar_le_parallelized(&vi.end, i as Uint);
-                let slen_le_i = k.k.scalar_le_parallelized(&s_len, i as Uint);
+                let end_le_i = k.k.scalar_le_parallelized(&vi.end, *i as Uint);
+                let slen_le_i = k.k.scalar_le_parallelized(&s_len, *i as Uint);
                 let is_empty = binary_or(k, &end_le_i, &slen_le_i);
 
                 // is_start = b && vi.is_start && is_empty ? 0 : vi.is_start
@@ -1113,7 +1116,9 @@ impl FheStringSliceVector {
                 }
             })
             .collect::<Vec<_>>();
-        v.reverse();
+        if !self.reverse {
+            v.reverse();
+        }
         self.v = v;
     }
 
@@ -1309,6 +1314,17 @@ pub fn splitn(
 /// If p.len == 0, the result is undefined.
 pub fn split_terminator(k: &ServerKey, s: &FheString, p: &FheString) -> FheStringSliceVector {
     let mut v = split(k, s, p);
+    v.truncate_last_if_empty(k);
+    v
+}
+
+/// Splits the string `s` at each occurrence of `p` into a vector of substrings
+/// in reverse order where the last substring is skipped if empty.
+///
+/// # Limitations
+/// If p.len == 0, the result is undefined.
+pub fn rsplit_terminator(k: &ServerKey, s: &FheString, p: &FheString) -> FheStringSliceVector {
+    let mut v = rsplit(k, s, p);
     v.truncate_last_if_empty(k);
     v
 }
