@@ -85,8 +85,8 @@ impl FheString {
     pub fn new(k: &ClientKey, s: &str, l: usize) -> Result<Self, Error> {
         if !s.is_ascii() {
             return Err("string is not ascii".into());
-        } else if s.chars().find(|&x| x as u8 == 0).is_some() {
-            return Err("string contains 0 char".into());
+        } else if s.chars().find(|&x| x as Uint == Self::TERMINATOR).is_some() {
+            return Err("string contains terminator character".into());
         } else if s.len() > Self::max_len_with_key(k) {
             return Err("string length exceeds maximum length".into());
         } else if l > Self::max_len_with_key(k) {
@@ -537,11 +537,12 @@ impl FheString {
     /// character.
     pub fn trim_end(&self, k: &ServerKey) -> FheString {
         let (_, i) = self.rfind_char(k, |k, c| {
-            let is_zero = k.k.scalar_eq_parallelized(&c.0, 0 as Uint);
-            let not_zero = binary_not(k, &is_zero);
+            // !is_terminator(c) && !is_whitespace(c)
+            let is_term = k.k.scalar_eq_parallelized(&c.0, Self::TERMINATOR);
+            let not_term = binary_not(k, &is_term);
             let is_whitespace = c.is_whitespace(k);
             let not_whitespace = binary_not(k, &is_whitespace);
-            k.k.mul_parallelized(&not_zero, &not_whitespace)
+            binary_and(k, &not_term, &not_whitespace)
         });
 
         let i = k.k.scalar_add_parallelized(&i, 1 as Uint);
