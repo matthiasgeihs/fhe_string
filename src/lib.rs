@@ -732,4 +732,55 @@ mod tests {
             assert_eq!(result, result_dec, "test case {i}");
         })
     }
+
+    #[test]
+    fn rsplitn() {
+        let (client_key, server_key) = setup();
+
+        #[derive(Debug)]
+        struct TestCase<'a> {
+            input: &'a str,
+            pattern: &'a str,
+            pad: Option<usize>,
+            n: usize,
+        }
+
+        let test_cases = vec![
+            TestCase {
+                input: "xxx",
+                pattern: "x",
+                pad: None,
+                n: 1,
+            },
+            TestCase {
+                input: "axa",
+                pattern: "x",
+                pad: None,
+                n: 2,
+            },
+            TestCase {
+                input: "xxx",
+                pattern: "xx",
+                pad: None,
+                n: 3,
+            },
+        ];
+
+        test_cases.iter().enumerate().for_each(|(i, t)| {
+            let input_enc = encrypt_string(&client_key, t.input, t.pad);
+            let pattern_enc = encrypt_string(&client_key, t.pattern, t.pad);
+            let n_enc = encrypt_int(&client_key, t.n as u64);
+
+            let result = t.input.rsplitn(t.n, t.pattern).collect::<Vec<_>>();
+
+            let result_enc = ciphertext::rsplitn(&server_key, &input_enc, &n_enc, &pattern_enc);
+            let result_dec = result_enc.decrypt(&client_key);
+
+            println!("{:?}", t);
+            println!("std = \"{:?}\"", result);
+            println!("fhe = \"{:?}\" ", result_dec);
+
+            assert_eq!(result, result_dec, "test case {i}");
+        })
+    }
 }

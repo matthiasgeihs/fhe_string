@@ -1051,8 +1051,6 @@ impl FheStringSliceVector {
 
     /// Truncates `self` starting from index `i`.
     pub fn truncate(&mut self, k: &ServerKey, i: &RadixCiphertext) {
-        assert!(!self.reverse, "does not support reverse indexing");
-
         /*
         n = 0
         for i in v.len:
@@ -1061,21 +1059,34 @@ impl FheStringSliceVector {
         */
         let mut n = k.create_zero();
         let zero = k.create_zero();
-        self.v = self
-            .v
+
+        let iter_items = self.v.iter();
+        let iter_items = if self.reverse {
+            iter_items.rev().collect::<Vec<_>>()
+        } else {
+            iter_items.collect::<Vec<_>>()
+        };
+
+        self.v = iter_items
             .iter()
             .map(|vi| {
-                // n < i
+                // is_start = n < i ? vi.is_start : 0
                 let n_lt_i = k.k.lt_parallelized(&n, &i);
                 let is_start = binary_if_then_else(k, &n_lt_i, &vi.is_start, &zero);
-                let end = binary_if_then_else(k, &n_lt_i, &vi.end, &zero);
 
                 // n += v[i].is_start
                 k.k.add_assign_parallelized(&mut n, &vi.is_start);
 
-                FheStringSlice { is_start, end }
+                FheStringSlice {
+                    is_start,
+                    end: vi.end.clone(),
+                }
             })
             .collect::<Vec<_>>();
+
+        if self.reverse {
+            self.v.reverse();
+        }
     }
 
     /// Truncate the last element if it is empty.
@@ -1122,33 +1133,66 @@ impl FheStringSliceVector {
         self.v = v;
     }
 
-    /// Expand the last slice to the length of the string.
+    /// Expand the last slice to the end of the string.
     fn expand_last(&mut self, k: &ServerKey) {
-        assert!(!self.reverse, "does not support reverse indexing");
+        self.v = if self.reverse {
+            // Find the first encrypted item, store its end point, and disable
+            // it. Enable the first cleartext item and set its end point to the
+            // stored end point.
+            let mut not_found = k.create_one();
+            let mut end = k.create_value(self.s.max_len() as Uint);
+            let zero = k.create_zero();
+            let mut v = self
+                .v
+                .iter()
+                .map(|vi| {
+                    // is_start = not_found && vi.is_start ? 0 : vi.is_start
+                    let not_found_and_start = binary_and(k, &not_found, &vi.is_start);
+                    let is_start =
+                        binary_if_then_else(k, &not_found_and_start, &zero, &vi.is_start);
+                    end = binary_if_then_else(k, &not_found_and_start, &vi.end, &end);
 
-        let mut b = k.create_one();
-        let mut v = self
-            .v
-            .iter()
-            .rev()
-            .map(|vi| {
-                // end = b && vi.is_start ? self.s.max_len : vi.end
-                let b_and_start = binary_and(k, &b, &vi.is_start);
-                let max_len = k.create_value(self.s.max_len() as Uint);
-                let end = binary_if_then_else(k, &b_and_start, &max_len, &vi.end);
+                    // not_found = not_found && !vi.is_start
+                    let not_start = binary_not(k, &vi.is_start);
+                    not_found = binary_and(k, &not_found, &not_start);
 
-                // b = b && !vi.is_start
-                let not_start = binary_not(k, &vi.is_start);
-                b = binary_and(k, &b, &not_start);
+                    FheStringSlice {
+                        is_start,
+                        end: vi.end.clone(),
+                    }
+                })
+                .collect::<Vec<_>>();
+            if let Some(v0) = v.get_mut(0) {
+                v0.is_start = k.create_one();
+                v0.end = end;
+            }
+            v
+        } else {
+            // Find the last item and set its end point to s.max_len.
+            let mut not_found = k.create_one();
+            let mut v = self
+                .v
+                .iter()
+                .rev()
+                .map(|vi| {
+                    // end = not_found && vi.is_start ? self.s.max_len : vi.end
+                    let not_found_and_start = binary_and(k, &not_found, &vi.is_start);
+                    let max_len = k.create_value(self.s.max_len() as Uint);
+                    let end = binary_if_then_else(k, &not_found_and_start, &max_len, &vi.end);
 
-                FheStringSlice {
-                    is_start: vi.is_start.clone(),
-                    end,
-                }
-            })
-            .collect::<Vec<_>>();
-        v.reverse();
-        self.v = v;
+                    // not_found = not_found && !vi.is_start
+                    let not_start = binary_not(k, &vi.is_start);
+                    not_found = binary_and(k, &not_found, &not_start);
+
+                    FheStringSlice {
+                        is_start: vi.is_start.clone(),
+                        end,
+                    }
+                })
+                .collect::<Vec<_>>();
+            v.reverse();
+            v
+        };
     }
 
     /// Decrypts this vector.
@@ -1302,6 +1346,23 @@ pub fn splitn(
     p: &FheString,
 ) -> FheStringSliceVector {
     let mut v = split(k, s, p);
+    v.truncate(k, n);
+    v.expand_last(k);
+    v
+}
+
+/// Splits the string `s` at each occurrence of `p` into a vector of substrings
+/// of at most length `n` in reverse order.
+///
+/// # Limitations
+/// If p.len == 0, the result is undefined.
+pub fn rsplitn(
+    k: &ServerKey,
+    s: &FheString,
+    n: &RadixCiphertext,
+    p: &FheString,
+) -> FheStringSliceVector {
+    let mut v = rsplit(k, s, p);
     v.truncate(k, n);
     v.expand_last(k);
     v
