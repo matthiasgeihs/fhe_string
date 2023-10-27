@@ -1259,11 +1259,17 @@ fn split_opt(
 }
 
 /// Splits the string `s` at each occurrence of `p` into a vector of substrings.
+///
+/// # Limitations
+/// If p.len == 0, the result is undefined.
 pub fn split(k: &ServerKey, s: &FheString, p: &FheString) -> FheStringSliceVector {
     split_opt(k, s, p, false, false)
 }
 
 /// Splits the string `s` at each occurrence of `p` into a vector of substrings and returns the elements in reverse order.
+///
+/// # Limitations
+/// If p.len == 0, the result is undefined.
 pub fn rsplit(k: &ServerKey, s: &FheString, p: &FheString) -> FheStringSliceVector {
     let mut v = split_opt(k, s, p, false, true);
     v.reverse();
@@ -1272,12 +1278,18 @@ pub fn rsplit(k: &ServerKey, s: &FheString, p: &FheString) -> FheStringSliceVect
 
 /// Splits the string `s` at each occurrence of `p` into a vector of substrings
 /// where the pattern is included at the end of each substring.
+///
+/// # Limitations
+/// If p.len == 0, the result is undefined.
 pub fn split_inclusive(k: &ServerKey, s: &FheString, p: &FheString) -> FheStringSliceVector {
     split_opt(k, s, p, true, false)
 }
 
 /// Splits the string `s` at each occurrence of `p` into a vector of substrings
 /// of at most length `n`.
+///
+/// # Limitations
+/// If p.len == 0, the result is undefined.
 pub fn splitn(
     k: &ServerKey,
     s: &FheString,
@@ -1292,6 +1304,9 @@ pub fn splitn(
 
 /// Splits the string `s` at each occurrence of `p` into a vector of substrings
 /// where the last substring is skipped if empty.
+///
+/// # Limitations
+/// If p.len == 0, the result is undefined.
 pub fn split_terminator(k: &ServerKey, s: &FheString, p: &FheString) -> FheStringSliceVector {
     let mut v = split(k, s, p);
     v.truncate_last_if_empty(k);
