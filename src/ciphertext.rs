@@ -327,6 +327,8 @@ impl FheString {
     }
 
     /// Searches `self` for the first index `i` with `p(self[i]) == 1`.
+    ///
+    /// Expects that `p` returns an encryption of either 0 or 1.
     pub fn find_pred_unchecked(
         &self,
         k: &ServerKey,
@@ -335,14 +337,15 @@ impl FheString {
         self.find_next_pred_unchecked(k, 0, p)
     }
 
-    /// Searches `self` for a match with `m` in reverse direction. Returns (1,
-    /// i) if a match was found, where i is the index of the last match.
-    /// Otherwise, returns (0, 0).
-    pub fn rfind_char(
+    /// Searches `self` for the first index `i` with `p(self[i]) == 1` in
+    /// reverse direction.
+    ///
+    /// Expects that `p` returns an encryption of either 0 or 1.
+    pub fn rfind_pred_unchecked(
         &self,
         k: &ServerKey,
-        m: fn(&ServerKey, &FheAsciiChar) -> RadixCiphertext,
-    ) -> (RadixCiphertext, RadixCiphertext) {
+        p: fn(&ServerKey, &FheAsciiChar) -> RadixCiphertext,
+    ) -> FheOption<RadixCiphertext> {
         let zero = k.create_zero();
         let mut b = zero.clone(); // Pattern contained.
         let mut index = zero.clone(); // Pattern index.
@@ -350,17 +353,20 @@ impl FheString {
         self.0.iter().enumerate().rev().for_each(|(i, c)| {
             log::debug!("rfind_char: at index {i}");
 
-            // mi = m(self[i])
-            let mi = m(k, c);
+            // pi = p(self[i])
+            let pi = p(k, c);
 
-            // index = b ? index : (mi ? i : 0)
-            let mi_mul_i = k.k.scalar_mul_parallelized(&mi, i as Uint);
-            index = binary_if_then_else(k, &b, &index, &mi_mul_i);
+            // index = b ? index : (pi ? i : 0)
+            let pi_mul_i = k.k.scalar_mul_parallelized(&pi, i as Uint);
+            index = binary_if_then_else(k, &b, &index, &pi_mul_i);
 
-            // b = b || mi
-            b = binary_or(&k, &b, &mi);
+            // b = b || pi
+            b = binary_or(&k, &b, &pi);
         });
-        (b, index)
+        FheOption {
+            is_some: b,
+            val: index,
+        }
     }
 
     /// Returns whether `self` starts with the string `s`. The result is an
@@ -536,7 +542,7 @@ impl FheString {
     /// Returns `self[..i+1]` where `i` is the index of the last non-whitespace
     /// character.
     pub fn trim_end(&self, k: &ServerKey) -> FheString {
-        let (_, i) = self.rfind_char(k, |k, c| {
+        let i_opt = self.rfind_pred_unchecked(k, |k, c| {
             // !is_terminator(c) && !is_whitespace(c)
             let is_term = k.k.scalar_eq_parallelized(&c.0, Self::TERMINATOR);
             let not_term = binary_not(k, &is_term);
@@ -545,7 +551,9 @@ impl FheString {
             binary_and(k, &not_term, &not_whitespace)
         });
 
-        let i = k.k.scalar_add_parallelized(&i, 1 as Uint);
+        // i = i_opt.is_some ? i_opt.val + 1 : 0
+        let val_add_1 = k.k.scalar_add_parallelized(&i_opt.val, 1);
+        let i = binary_if_then_else(k, &i_opt.is_some, &val_add_1, &k.create_zero());
         self.truncate(k, &i)
     }
 
