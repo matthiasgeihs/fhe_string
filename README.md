@@ -8,6 +8,9 @@ Library for computing on encrypted strings using [tfhe-rs](https://github.com/za
 # all tests
 cargo test --release
 
+# all tests sequentially
+cargo test --release -- --test-threads=1
+
 # single test with log
 RUST_LOG=debug RUST_BACKTRACE=1 cargo test --release "tests::$TEST_NAME" -- --nocapture --exact
 ```
@@ -29,5 +32,9 @@ TestCase {
 std = "["", "x", "x", "x", ""]"
 fhe = "["", "", ""]"
 ```
+
 - ensure that no constructed `FheStringSliceVector` is longer than
   Key::max_int because otherwise we can't ensure correct indexing
+
+- change FheStringSliceVector to include starting positions (instead of assuming
+  one entry per character)?

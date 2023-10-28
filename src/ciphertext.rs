@@ -160,8 +160,7 @@ impl FheString {
         self.find(k, s).is_some
     }
 
-    /// If `self` contains `s`, returns (1, i), where i is the index of the
-    /// first occurrence of `s`. Otherwise, returns (0, 0).
+    /// Returns the index of the first occurrence of `s`, if existent.
     pub fn find(&self, k: &ServerKey, s: &FheString) -> FheOption<RadixCiphertext> {
         let zero = k.create_zero();
         let mut b = zero.clone(); // Pattern contained.
@@ -304,8 +303,7 @@ impl FheString {
             .collect::<Vec<_>>()
     }
 
-    /// If `self` contains `s`, returns (1, i), where i is the index of the
-    /// last occurrence of `s`. Otherwise, returns (0, 0).
+    /// Returns the index of the last occurence of `s`, if existent.
     pub fn rfind(&self, k: &ServerKey, s: &FheString) -> FheOption<RadixCiphertext> {
         let zero = k.create_zero();
         let mut b = zero.clone(); // Pattern contained.
@@ -420,7 +418,7 @@ impl FheString {
     /// Returns whether `self` ends with the string `s`. The result is an
     /// encryption of 1 if this is the case and an encryption of 0 otherwise.
     pub fn ends_with(&self, k: &ServerKey, s: &FheString) -> RadixCiphertext {
-        let opti = self.find(k, s);
+        let opti = self.rfind(k, s);
 
         // is_end = self.len == i + s.len
         let self_len = self.len(k);
@@ -429,7 +427,7 @@ impl FheString {
         let is_end = k.k.eq_parallelized(&self_len, &i_add_s_len);
 
         // ends_with = contained && is_end
-        k.k.mul_parallelized(&opti.is_some, &is_end)
+        binary_and(k, &opti.is_some, &is_end)
     }
 
     /// Returns whether `self` is empty. The result is an encryption of 1 if
