@@ -1452,3 +1452,57 @@ pub fn split_ascii_whitespace(k: &ServerKey, s: &FheString) -> FheStringSliceVec
         reverse: false,
     }
 }
+
+/// Splits the string on the first occurrence of the specified delimiter and
+/// returns prefix before delimiter and suffix after delimiter. Optionally,
+/// searches in reverse order.
+fn split_once_opt(
+    k: &ServerKey,
+    s: &FheString,
+    p: &FheString,
+    reverse: bool,
+) -> FheOption<FheStringSliceVector> {
+    let found = if reverse { s.rfind(k, p) } else { s.find(k, p) };
+    let max_len = s.max_len();
+    let max_len_enc = k.create_value(max_len as Uint);
+    let p_len = p.len(k);
+
+    // next = found.val + p_len
+    let next = k.k.add_parallelized(&found.val, &p_len);
+
+    // v[i] = i == 0 ? (1, found.val) : (i == next ? 1 : 0, max_len)
+    let v = (0..max_len + 1)
+        .into_par_iter()
+        .map(|i| match i {
+            0 => FheStringSlice {
+                is_start: k.create_one(),
+                end: found.val.clone(),
+            },
+            _ => FheStringSlice {
+                is_start: k.k.scalar_eq_parallelized(&next, i as Uint),
+                end: max_len_enc.clone(),
+            },
+        })
+        .collect();
+
+    FheOption {
+        is_some: found.is_some,
+        val: FheStringSliceVector {
+            s: s.clone(),
+            v,
+            reverse: false,
+        },
+    }
+}
+
+/// Splits the string on the first occurrence of the specified delimiter and
+/// returns prefix before delimiter and suffix after delimiter.
+pub fn split_once(k: &ServerKey, s: &FheString, p: &FheString) -> FheOption<FheStringSliceVector> {
+    split_once_opt(k, s, p, false)
+}
+
+/// Splits the string on the last occurrence of the specified delimiter and
+/// returns prefix before delimiter and suffix after delimiter.
+pub fn rsplit_once(k: &ServerKey, s: &FheString, p: &FheString) -> FheOption<FheStringSliceVector> {
+    split_once_opt(k, s, p, true)
+}
