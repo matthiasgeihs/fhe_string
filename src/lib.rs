@@ -151,7 +151,8 @@ mod tests {
         // find
         let opti = INPUT.find(PATTERN);
         let (b, i) = (opti.is_some(), opti.unwrap_or_default());
-        let (b_enc, i_enc) = input_enc.find(&server_key, &pattern_enc);
+        let opti_enc = input_enc.find(&server_key, &pattern_enc);
+        let (b_enc, i_enc) = (opti_enc.is_some, opti_enc.val);
         let b_dec = client_key.0.decrypt::<u8>(&b_enc);
         let i_dec = client_key.0.decrypt::<u32>(&i_enc);
         println!("find: ({}, {}) ?= ({}, {})", b as u8, i, b_dec, i_dec);
@@ -160,7 +161,8 @@ mod tests {
         // rfind
         let opti = INPUT.rfind(PATTERN);
         let (b, i) = (opti.is_some(), opti.unwrap_or_default());
-        let (b_enc, i_enc) = input_enc.rfind(&server_key, &pattern_enc);
+        let opti_enc = input_enc.rfind(&server_key, &pattern_enc);
+        let (b_enc, i_enc) = (opti_enc.is_some, opti_enc.val);
         let b_dec = client_key.0.decrypt::<u8>(&b_enc);
         let i_dec = client_key.0.decrypt::<u32>(&i_enc);
         println!("rfind: ({}, {}) ?= ({}, {})", b as u8, i, b_dec, i_dec);

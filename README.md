@@ -26,3 +26,5 @@ TestCase {
 std = "["", "x", "x", "x", ""]"
 fhe = "["", "", ""]"
 ```
+- ensure that no constructed `FheStringSliceVector` is longer than
+  Key::max_int because otherwise we can't ensure correct indexing

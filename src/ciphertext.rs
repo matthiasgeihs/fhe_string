@@ -157,13 +157,12 @@ impl FheString {
     /// Returns whether `self` contains the string `s`. The result is an
     /// encryption of 1 if this is the case and an encryption of 0 otherwise.
     pub fn contains(&self, k: &ServerKey, s: &FheString) -> RadixCiphertext {
-        let (b, _) = self.find(k, s);
-        b
+        self.find(k, s).is_some
     }
 
     /// If `self` contains `s`, returns (1, i), where i is the index of the
     /// first occurrence of `s`. Otherwise, returns (0, 0).
-    pub fn find(&self, k: &ServerKey, s: &FheString) -> (RadixCiphertext, RadixCiphertext) {
+    pub fn find(&self, k: &ServerKey, s: &FheString) -> FheOption<RadixCiphertext> {
         let zero = k.create_zero();
         let mut b = zero.clone(); // Pattern contained.
         let mut index = zero.clone(); // Pattern index.
@@ -181,7 +180,10 @@ impl FheString {
             // b = b || eq
             b = binary_or(&k, &b, &eq);
         });
-        (b, index)
+        FheOption {
+            is_some: b,
+            val: index,
+        }
     }
 
     /// Returns a vector v of length self.max_len where the i-th entry is an
@@ -304,7 +306,7 @@ impl FheString {
 
     /// If `self` contains `s`, returns (1, i), where i is the index of the
     /// last occurrence of `s`. Otherwise, returns (0, 0).
-    pub fn rfind(&self, k: &ServerKey, s: &FheString) -> (RadixCiphertext, RadixCiphertext) {
+    pub fn rfind(&self, k: &ServerKey, s: &FheString) -> FheOption<RadixCiphertext> {
         let zero = k.create_zero();
         let mut b = zero.clone(); // Pattern contained.
         let mut index = zero.clone(); // Pattern index.
@@ -322,7 +324,10 @@ impl FheString {
             // b = b || eq
             b = binary_or(&k, &b, &eq);
         });
-        (b, index)
+        FheOption {
+            is_some: b,
+            val: index,
+        }
     }
 
     /// Searches `self` for the first index `j >= i` with `p(self[j]) == 1`.
@@ -415,16 +420,16 @@ impl FheString {
     /// Returns whether `self` ends with the string `s`. The result is an
     /// encryption of 1 if this is the case and an encryption of 0 otherwise.
     pub fn ends_with(&self, k: &ServerKey, s: &FheString) -> RadixCiphertext {
-        let (contained, i) = self.find(k, s);
+        let opti = self.find(k, s);
 
         // is_end = self.len == i + s.len
         let self_len = self.len(k);
         let s_len = s.len(k);
-        let i_add_s_len = k.k.add_parallelized(&i, &s_len);
+        let i_add_s_len = k.k.add_parallelized(&opti.val, &s_len);
         let is_end = k.k.eq_parallelized(&self_len, &i_add_s_len);
 
         // ends_with = contained && is_end
-        k.k.mul_parallelized(&contained, &is_end)
+        k.k.mul_parallelized(&opti.is_some, &is_end)
     }
 
     /// Returns whether `self` is empty. The result is an encryption of 1 if
@@ -614,7 +619,9 @@ impl FheString {
     /// Returns a copy of `self` where the end of `self` is stripped if it is
     /// equal to `s`.
     pub fn strip_suffix(&self, k: &ServerKey, s: &FheString) -> FheString {
-        let (b, i) = self.rfind(k, s);
+        let found = self.rfind(k, s);
+        let b = found.is_some;
+        let i = found.val;
         let self_len = self.len(k);
         let s_len = s.len(k);
 
