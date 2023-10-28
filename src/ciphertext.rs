@@ -649,7 +649,7 @@ impl FheString {
     /// Returns `self[index..]`.
     pub fn substr(&self, k: &ServerKey, index: &RadixCiphertext) -> FheString {
         let v = (0..self.0.len())
-            .par_bridge()
+            .into_par_iter()
             .map(|i| {
                 log::debug!("substr: at index {i}");
 
@@ -669,7 +669,7 @@ impl FheString {
         end: &RadixCiphertext,
     ) -> FheString {
         let v = (0..self.0.len())
-            .par_bridge()
+            .into_par_iter()
             .map(|i| {
                 log::debug!("substr_end: at index {i}");
 
@@ -857,13 +857,13 @@ impl FheString {
     pub fn insert(&self, k: &ServerKey, index: &RadixCiphertext, s: &FheString) -> FheString {
         let a = self;
         let b = s;
-        let l = std::cmp::min(a.0.len() + b.0.len() - 2, Self::max_len_with_key(k));
+        let l = std::cmp::min(a.max_len() + b.max_len(), Self::max_len_with_key(k));
         let b_len = b.len(k);
 
         let mut v = (0..l)
-            .par_bridge()
+            .into_par_iter()
             .map(|i| {
-                // v[i] = i < index ? a[i] : (i < index + b.len ? b[i - index] : a[i - index])
+                // v[i] = i < index ? a[i] : (i < index + b.len ? b[i - index] : a[i - b.len])
 
                 // c0 = i < index
                 let c0 = k.k.scalar_gt_parallelized(index, i as Uint);
@@ -871,18 +871,23 @@ impl FheString {
                 // c1 = a[i]
                 let c1 = &a.0[i % a.0.len()].0;
 
-                // c2 = i < index + b.len ? b[i - index] : a[i - index]
-                let index_add_blen = k.k.add_parallelized(index, &b_len);
-                let i_leq_index_add_blen = k.k.scalar_gt_parallelized(&index_add_blen, i as Uint);
+                // b[i - index]
                 let i_radix = k.create_value(i as Uint);
                 let i_sub_index = k.k.sub_parallelized(&i_radix, &index);
                 let b_i_sub_index = b.char_at(k, &i_sub_index);
-                let a_i_sub_index = a.char_at(k, &i_sub_index);
+
+                // a[i - b.len]
+                let i_sub_b_len = k.k.sub_parallelized(&i_radix, &b_len);
+                let a_i_sub_b_len = a.char_at(k, &i_sub_b_len);
+
+                // c2 = i < index + b.len ? b[i - index] : a[i - b.len]
+                let index_add_blen = k.k.add_parallelized(index, &b_len);
+                let i_lt_index_add_blen = k.k.scalar_gt_parallelized(&index_add_blen, i as Uint);
                 let c2 = binary_if_then_else(
                     k,
-                    &i_leq_index_add_blen,
+                    &i_lt_index_add_blen,
                     &b_i_sub_index.0,
-                    &a_i_sub_index.0,
+                    &a_i_sub_b_len.0,
                 );
 
                 // c = c0 ? c1 : c2
