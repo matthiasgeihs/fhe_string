@@ -47,7 +47,7 @@ mod tests {
     }
 
     fn setup() -> (ClientKey, ServerKey) {
-        env_logger::init();
+        let _ = env_logger::try_init(); // Ignore error if already initialized.
         generate_keys(PARAM_MESSAGE_2_CARRY_2_KS_PBS)
     }
 

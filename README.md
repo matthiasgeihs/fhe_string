@@ -4,9 +4,12 @@ Library for computing on encrypted strings using [tfhe-rs](https://github.com/za
 
 ## Test
 
-```
-TEST_NAME=[insert test name]
-RUST_LOG=debug RUST_BACKTRACE=1 cargo test --release $TEST_NAME -- --nocapture
+```bash
+# all tests
+cargo test --release
+
+# single test with log
+RUST_LOG=debug RUST_BACKTRACE=1 cargo test --release "tests::$TEST_NAME" -- --nocapture --exact
 ```
 
 ## Design principles
