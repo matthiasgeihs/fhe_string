@@ -34,10 +34,10 @@ mod tests {
         server_key::ServerKey,
     };
 
-    // const INPUT: &'static str = " defabcabc ";
-    // const PATTERN: &'static str = "abc";
-    const INPUT: &'static str = "aaaa";
-    const PATTERN: &'static str = "aa";
+    const INPUT: &'static str = " defabcabc ";
+    const PATTERN: &'static str = "abc";
+    // const INPUT: &'static str = "aaaa";
+    // const PATTERN: &'static str = "aa";
 
     fn setup_enc() -> (ClientKey, ServerKey, FheString, FheString) {
         let (client_key, server_key) = generate_keys(PARAM_MESSAGE_2_CARRY_2_KS_PBS);
@@ -85,7 +85,7 @@ mod tests {
 
         // eq_ignore_case
         let eq = INPUT.eq_ignore_ascii_case(PATTERN) as u8;
-        let eq_enc = input_enc.eq_ignore_case(&server_key, &pattern_enc);
+        let eq_enc = input_enc.eq_ignore_ascii_case(&server_key, &pattern_enc);
         let eq_dec = client_key.0.decrypt::<u8>(&eq_enc);
         println!("eq_ignore_case: {} ?= {}", eq, eq_dec);
         assert_eq!(eq, eq_dec, "eq_ignore_case");
