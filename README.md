@@ -38,3 +38,7 @@ fhe = "["", "", ""]"
 
 - change FheStringSliceVector to include starting positions (instead of assuming
   one entry per character)?
+
+- check usage of `unchecked_sum_ciphertexts_vec_parallelized` and
+  `unchecked_sum_ciphertexts_slice_parallelized`: usage requires no carries. see
+  function documentation for more details.

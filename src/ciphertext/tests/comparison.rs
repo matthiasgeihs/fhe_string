@@ -1,4 +1,4 @@
-use crate::ciphertext::tests::{encrypt_string, int_to_bool, setup};
+use crate::ciphertext::tests::{decrypt_bool, encrypt_string, setup};
 
 #[test]
 fn is_empty() {
@@ -42,8 +42,7 @@ fn is_empty() {
         let result = t.input.is_empty();
 
         let result_enc = input_enc.is_empty(&server_key);
-        let result_dec = client_key.0.decrypt::<u64>(&result_enc);
-        let result_dec = int_to_bool(result_dec);
+        let result_dec = decrypt_bool(&client_key, &result_enc);
 
         println!("{:?}", t);
         println!("std = \"{:?}\"", result);
@@ -113,8 +112,7 @@ fn eq_ne() {
         let result = t.a.eq(t.b);
 
         let result_enc = a_enc.eq(&server_key, &b_enc);
-        let result_dec = client_key.0.decrypt::<u64>(&result_enc);
-        let result_dec = int_to_bool(result_dec);
+        let result_dec = decrypt_bool(&client_key, &result_enc);
 
         println!("eq: {:?}", t);
         println!("std = \"{:?}\"", result);
@@ -127,8 +125,7 @@ fn eq_ne() {
         let result = t.a.ne(t.b);
 
         let result_enc = a_enc.ne(&server_key, &b_enc);
-        let result_dec = client_key.0.decrypt::<u64>(&result_enc);
-        let result_dec = int_to_bool(result_dec);
+        let result_dec = decrypt_bool(&client_key, &result_enc);
 
         println!("ne: {:?}", t);
         println!("std = \"{:?}\"", result);
@@ -204,8 +201,7 @@ fn le_lt_ge_gt() {
         let result = t.a.le(t.b);
 
         let result_enc = a_enc.le(&server_key, &b_enc);
-        let result_dec = client_key.0.decrypt::<u64>(&result_enc);
-        let result_dec = int_to_bool(result_dec);
+        let result_dec = decrypt_bool(&client_key, &result_enc);
 
         println!("le: {:?}", t);
         println!("std = \"{:?}\"", result);
@@ -218,8 +214,7 @@ fn le_lt_ge_gt() {
         let result = t.a.lt(t.b);
 
         let result_enc = a_enc.lt(&server_key, &b_enc);
-        let result_dec = client_key.0.decrypt::<u64>(&result_enc);
-        let result_dec = int_to_bool(result_dec);
+        let result_dec = decrypt_bool(&client_key, &result_enc);
 
         println!("lt: {:?}", t);
         println!("std = \"{:?}\"", result);
@@ -232,8 +227,7 @@ fn le_lt_ge_gt() {
         let result = t.a.ge(t.b);
 
         let result_enc = a_enc.ge(&server_key, &b_enc);
-        let result_dec = client_key.0.decrypt::<u64>(&result_enc);
-        let result_dec = int_to_bool(result_dec);
+        let result_dec = decrypt_bool(&client_key, &result_enc);
 
         println!("ge: {:?}", t);
         println!("std = \"{:?}\"", result);
@@ -246,8 +240,7 @@ fn le_lt_ge_gt() {
         let result = t.a.gt(t.b);
 
         let result_enc = a_enc.gt(&server_key, &b_enc);
-        let result_dec = client_key.0.decrypt::<u64>(&result_enc);
-        let result_dec = int_to_bool(result_dec);
+        let result_dec = decrypt_bool(&client_key, &result_enc);
 
         println!("gt: {:?}", t);
         println!("std = \"{:?}\"", result);
@@ -297,8 +290,7 @@ fn eq_ignore_case() {
         let result = t.a.eq_ignore_ascii_case(t.b);
 
         let result_enc = a_enc.eq_ignore_ascii_case(&server_key, &b_enc);
-        let result_dec = client_key.0.decrypt::<u64>(&result_enc);
-        let result_dec = int_to_bool(result_dec);
+        let result_dec = decrypt_bool(&client_key, &result_enc);
 
         println!("{:?}", t);
         println!("std = \"{:?}\"", result);
