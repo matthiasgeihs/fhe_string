@@ -9,6 +9,7 @@ mod convert;
 mod insert;
 mod replace;
 mod search;
+mod split;
 mod trim;
 
 fn setup() -> (ClientKey, ServerKey) {
