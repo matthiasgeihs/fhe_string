@@ -42,3 +42,6 @@ fhe = "["", "", ""]"
 - check usage of `unchecked_sum_ciphertexts_vec_parallelized` and
   `unchecked_sum_ciphertexts_slice_parallelized`: usage requires no carries. see
   function documentation for more details.
+
+- hide `FheStringSliceVector.reverse`. object should not leak whether reverse
+  operation has been applied.
