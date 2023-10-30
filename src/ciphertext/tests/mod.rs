@@ -6,6 +6,7 @@ use super::{FheOption, FheString};
 
 mod comparison;
 mod search;
+mod trim;
 
 fn setup() -> (ClientKey, ServerKey) {
     let _ = env_logger::try_init(); // Ignore error if already initialized.
@@ -34,13 +35,25 @@ fn decrypt_bool(k: &ClientKey, b: &RadixCiphertext) -> bool {
     int_to_bool(x)
 }
 
-fn decrypt_option(k: &ClientKey, opt: &FheOption<RadixCiphertext>) -> Option<usize> {
+fn decrypt_option_int(k: &ClientKey, opt: &FheOption<RadixCiphertext>) -> Option<usize> {
     let is_some = k.0.decrypt::<u64>(&opt.is_some);
     match is_some {
         0 => None,
         1 => {
             let val = k.0.decrypt::<u64>(&opt.val);
             Some(val as usize)
+        }
+        _ => panic!("expected 0 or 1, got {}", is_some),
+    }
+}
+
+fn decrypt_option_string(k: &ClientKey, opt: &FheOption<FheString>) -> Option<String> {
+    let is_some = k.0.decrypt::<u64>(&opt.is_some);
+    match is_some {
+        0 => None,
+        1 => {
+            let val = opt.val.decrypt(k);
+            Some(val)
         }
         _ => panic!("expected 0 or 1, got {}", is_some),
     }

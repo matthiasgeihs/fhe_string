@@ -73,53 +73,6 @@ mod tests {
     }
 
     #[test]
-    fn trim() {
-        let (client_key, server_key, input_enc, _) = setup_enc();
-
-        // trim
-        let t = INPUT.trim();
-        let t_enc = input_enc.trim(&server_key);
-        let t_dec = t_enc.decrypt(&client_key);
-        println!("trim: {} ?= {}", t, t_dec);
-        assert_eq!(t, t_dec, "trim");
-
-        // trim_start
-        let t = INPUT.trim_start();
-        let t_enc = input_enc.trim_start(&server_key);
-        let t_dec = t_enc.decrypt(&client_key);
-        println!("trim_start: {} ?= {}", t, t_dec);
-        assert_eq!(t, t_dec, "trim_start");
-
-        // trim_end
-        let t = INPUT.trim_end();
-        let t_enc = input_enc.trim_end(&server_key);
-        let t_dec = t_enc.decrypt(&client_key);
-        println!("trim_end: {} ?= {}", t, t_dec);
-        assert_eq!(t, t_dec, "trim_end");
-    }
-
-    #[test]
-    fn strip() {
-        let (client_key, server_key, input_enc, pattern_enc) = setup_enc();
-
-        // strip_prefix
-        let t = INPUT.strip_prefix(PATTERN);
-        let t = t.unwrap_or(INPUT);
-        let t_enc = input_enc.strip_prefix(&server_key, &pattern_enc);
-        let t_dec = t_enc.decrypt(&client_key);
-        println!("strip_prefix: {} ?= {}", t, t_dec);
-        assert_eq!(t, t_dec, "strip_prefix");
-
-        // strip_suffix
-        let t = INPUT.strip_suffix(PATTERN);
-        let t = t.unwrap_or(INPUT);
-        let t_enc = input_enc.strip_suffix(&server_key, &pattern_enc);
-        let t_dec = t_enc.decrypt(&client_key);
-        println!("strip_suffix: {} ?= {}", t, t_dec);
-        assert_eq!(t, t_dec, "strip_suffix");
-    }
-
-    #[test]
     fn case() {
         let (client_key, server_key, input_enc, _) = setup_enc();
 

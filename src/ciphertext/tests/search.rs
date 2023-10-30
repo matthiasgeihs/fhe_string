@@ -1,4 +1,4 @@
-use crate::ciphertext::tests::{decrypt_bool, decrypt_option, encrypt_string, setup};
+use crate::ciphertext::tests::{decrypt_bool, decrypt_option_int, encrypt_string, setup};
 
 #[test]
 fn find_rfind_contains() {
@@ -41,7 +41,7 @@ fn find_rfind_contains() {
         let result = t.a.find(t.b);
 
         let result_enc = a_enc.find(&server_key, &b_enc);
-        let result_dec = decrypt_option(&client_key, &result_enc);
+        let result_dec = decrypt_option_int(&client_key, &result_enc);
 
         println!("find: {:?}", t);
         println!("std = \"{:?}\"", result);
@@ -53,7 +53,7 @@ fn find_rfind_contains() {
         let result = t.a.rfind(t.b);
 
         let result_enc = a_enc.rfind(&server_key, &b_enc);
-        let result_dec = decrypt_option(&client_key, &result_enc);
+        let result_dec = decrypt_option_int(&client_key, &result_enc);
 
         println!("rfind: {:?}", t);
         println!("std = \"{:?}\"", result);
