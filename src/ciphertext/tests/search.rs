@@ -44,8 +44,8 @@ fn find_rfind_contains() {
         let result_dec = decrypt_option_int(&client_key, &result_enc);
 
         println!("find: {:?}", t);
-        println!("std = \"{:?}\"", result);
-        println!("fhe = \"{:?}\" ", result_dec);
+        println!("std = {:?}", result);
+        println!("fhe = {:?}", result_dec);
 
         assert_eq!(result, result_dec);
 
@@ -56,8 +56,8 @@ fn find_rfind_contains() {
         let result_dec = decrypt_option_int(&client_key, &result_enc);
 
         println!("rfind: {:?}", t);
-        println!("std = \"{:?}\"", result);
-        println!("fhe = \"{:?}\" ", result_dec);
+        println!("std = {:?}", result);
+        println!("fhe = {:?}", result_dec);
 
         assert_eq!(result, result_dec);
 
@@ -68,8 +68,8 @@ fn find_rfind_contains() {
         let result_dec = decrypt_bool(&client_key, &result_enc);
 
         println!("contains: {:?}", t);
-        println!("std = \"{:?}\"", result);
-        println!("fhe = \"{:?}\" ", result_dec);
+        println!("std = {:?}", result);
+        println!("fhe = {:?}", result_dec);
 
         assert_eq!(result, result_dec);
     });
@@ -119,8 +119,8 @@ fn starts_with_ends_with() {
         let result_dec = decrypt_bool(&client_key, &result_enc);
 
         println!("starts_with: {:?}", t);
-        println!("std = \"{:?}\"", result);
-        println!("fhe = \"{:?}\" ", result_dec);
+        println!("std = {:?}", result);
+        println!("fhe = {:?}", result_dec);
 
         assert_eq!(result, result_dec);
 
@@ -131,8 +131,8 @@ fn starts_with_ends_with() {
         let result_dec = decrypt_bool(&client_key, &result_enc);
 
         println!("ends_with: {:?}", t);
-        println!("std = \"{:?}\"", result);
-        println!("fhe = \"{:?}\" ", result_dec);
+        println!("std = {:?}", result);
+        println!("fhe = {:?}", result_dec);
 
         assert_eq!(result, result_dec);
     });

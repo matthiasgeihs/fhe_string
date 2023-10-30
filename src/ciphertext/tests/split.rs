@@ -39,8 +39,8 @@ fn split() {
         let result_dec = result_enc.decrypt(&client_key);
 
         println!("{:?}", t);
-        println!("std = \"{:?}\"", result);
-        println!("fhe = \"{:?}\" ", result_dec);
+        println!("std = {:?}", result);
+        println!("fhe = {:?}", result_dec);
 
         assert_eq!(result, result_dec, "test case {i}");
     })
@@ -90,8 +90,8 @@ fn splitn() {
         let result_dec = result_enc.decrypt(&client_key);
 
         println!("{:?}", t);
-        println!("std = \"{:?}\"", result);
-        println!("fhe = \"{:?}\" ", result_dec);
+        println!("std = {:?}", result);
+        println!("fhe = {:?}", result_dec);
 
         assert_eq!(result, result_dec, "test case {i}");
     })
@@ -136,8 +136,8 @@ fn split_terminator() {
         let result_dec = result_enc.decrypt(&client_key);
 
         println!("{:?}", t);
-        println!("std = \"{:?}\"", result);
-        println!("fhe = \"{:?}\" ", result_dec);
+        println!("std = {:?}", result);
+        println!("fhe = {:?}", result_dec);
 
         assert_eq!(result, result_dec, "test case {i}");
     })
@@ -182,8 +182,8 @@ fn split_inclusive() {
         let result_dec = result_enc.decrypt(&client_key);
 
         println!("{:?}", t);
-        println!("std = \"{:?}\"", result);
-        println!("fhe = \"{:?}\" ", result_dec);
+        println!("std = {:?}", result);
+        println!("fhe = {:?}", result_dec);
 
         assert_eq!(result, result_dec, "test case {i}");
     })
@@ -223,8 +223,8 @@ fn split_ascii_whitespace() {
         let result_dec = result_enc.decrypt(&client_key);
 
         println!("{:?}", t);
-        println!("std = \"{:?}\"", result);
-        println!("fhe = \"{:?}\" ", result_dec);
+        println!("std = {:?}", result);
+        println!("fhe = {:?}", result_dec);
 
         assert_eq!(result, result_dec, "test case {i}");
     })
@@ -284,8 +284,8 @@ fn rsplit() {
         let result_dec = result_enc.decrypt(&client_key);
 
         println!("{:?}", t);
-        println!("std = \"{:?}\"", result);
-        println!("fhe = \"{:?}\" ", result_dec);
+        println!("std = {:?}", result);
+        println!("fhe = {:?}", result_dec);
 
         assert_eq!(result, result_dec, "test case {i}");
     })
@@ -330,8 +330,8 @@ fn rsplit_terminator() {
         let result_dec = result_enc.decrypt(&client_key);
 
         println!("{:?}", t);
-        println!("std = \"{:?}\"", result);
-        println!("fhe = \"{:?}\" ", result_dec);
+        println!("std = {:?}", result);
+        println!("fhe = {:?}", result_dec);
 
         assert_eq!(result, result_dec, "test case {i}");
     })
@@ -381,8 +381,8 @@ fn rsplitn() {
         let result_dec = result_enc.decrypt(&client_key);
 
         println!("{:?}", t);
-        println!("std = \"{:?}\"", result);
-        println!("fhe = \"{:?}\" ", result_dec);
+        println!("std = {:?}", result);
+        println!("fhe = {:?}", result_dec);
 
         assert_eq!(result, result_dec, "test case {i}");
     })

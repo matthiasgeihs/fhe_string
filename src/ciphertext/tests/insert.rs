@@ -51,8 +51,8 @@ fn add() {
         let result_dec = result_enc.decrypt(&client_key);
 
         println!("{:?}", t);
-        println!("std = \"{:?}\"", result);
-        println!("fhe = \"{:?}\" ", result_dec);
+        println!("std = {:?}", result);
+        println!("fhe = {:?}", result_dec);
 
         assert_eq!(result, result_dec);
     });
@@ -101,8 +101,8 @@ fn repeat() {
         let result_dec = result_enc.decrypt(&client_key);
 
         println!("{:?}", t);
-        println!("std = \"{:?}\"", result);
-        println!("fhe = \"{:?}\" ", result_dec);
+        println!("std = {:?}", result);
+        println!("fhe = {:?}", result_dec);
 
         assert_eq!(result, result_dec);
     });

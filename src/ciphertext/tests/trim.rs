@@ -43,8 +43,8 @@ fn trim_trim_start_trim_end() {
         let result_dec = result_enc.decrypt(&client_key);
 
         println!("trim: {:?}", t);
-        println!("std = \"{:?}\"", result);
-        println!("fhe = \"{:?}\" ", result_dec);
+        println!("std = {:?}", result);
+        println!("fhe = {:?}", result_dec);
 
         assert_eq!(result, result_dec);
 
@@ -55,8 +55,8 @@ fn trim_trim_start_trim_end() {
         let result_dec = result_enc.decrypt(&client_key);
 
         println!("trim_start: {:?}", t);
-        println!("std = \"{:?}\"", result);
-        println!("fhe = \"{:?}\" ", result_dec);
+        println!("std = {:?}", result);
+        println!("fhe = {:?}", result_dec);
 
         assert_eq!(result, result_dec);
 
@@ -67,8 +67,8 @@ fn trim_trim_start_trim_end() {
         let result_dec = result_enc.decrypt(&client_key);
 
         println!("trim_end: {:?}", t);
-        println!("std = \"{:?}\"", result);
-        println!("fhe = \"{:?}\" ", result_dec);
+        println!("std = {:?}", result);
+        println!("fhe = {:?}", result_dec);
 
         assert_eq!(result, result_dec);
     })
@@ -124,8 +124,8 @@ fn strip_prefix_strip_suffix() {
         let result_dec = decrypt_option_string(&client_key, &result_enc);
 
         println!("strip_prefix: {:?}", t);
-        println!("std = \"{:?}\"", result);
-        println!("fhe = \"{:?}\" ", result_dec);
+        println!("std = {:?}", result);
+        println!("fhe = {:?}", result_dec);
 
         assert_eq!(result, result_dec);
 
@@ -136,8 +136,8 @@ fn strip_prefix_strip_suffix() {
         let result_dec = decrypt_option_string(&client_key, &result_enc);
 
         println!("strip_suffix: {:?}", t);
-        println!("std = \"{:?}\"", result);
-        println!("fhe = \"{:?}\" ", result_dec);
+        println!("std = {:?}", result);
+        println!("fhe = {:?}", result_dec);
 
         assert_eq!(result, result_dec);
     });

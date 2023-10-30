@@ -45,8 +45,8 @@ fn is_empty() {
         let result_dec = decrypt_bool(&client_key, &result_enc);
 
         println!("{:?}", t);
-        println!("std = \"{:?}\"", result);
-        println!("fhe = \"{:?}\" ", result_dec);
+        println!("std = {:?}", result);
+        println!("fhe = {:?}", result_dec);
 
         assert_eq!(result, result_dec);
     })
@@ -115,8 +115,8 @@ fn eq_ne() {
         let result_dec = decrypt_bool(&client_key, &result_enc);
 
         println!("eq: {:?}", t);
-        println!("std = \"{:?}\"", result);
-        println!("fhe = \"{:?}\" ", result_dec);
+        println!("std = {:?}", result);
+        println!("fhe = {:?}", result_dec);
 
         assert_eq!(result, result_dec);
 
@@ -128,8 +128,8 @@ fn eq_ne() {
         let result_dec = decrypt_bool(&client_key, &result_enc);
 
         println!("ne: {:?}", t);
-        println!("std = \"{:?}\"", result);
-        println!("fhe = \"{:?}\" ", result_dec);
+        println!("std = {:?}", result);
+        println!("fhe = {:?}", result_dec);
 
         assert_eq!(result, result_dec);
     })
@@ -204,8 +204,8 @@ fn le_lt_ge_gt() {
         let result_dec = decrypt_bool(&client_key, &result_enc);
 
         println!("le: {:?}", t);
-        println!("std = \"{:?}\"", result);
-        println!("fhe = \"{:?}\" ", result_dec);
+        println!("std = {:?}", result);
+        println!("fhe = {:?}", result_dec);
 
         assert_eq!(result, result_dec);
 
@@ -217,8 +217,8 @@ fn le_lt_ge_gt() {
         let result_dec = decrypt_bool(&client_key, &result_enc);
 
         println!("lt: {:?}", t);
-        println!("std = \"{:?}\"", result);
-        println!("fhe = \"{:?}\" ", result_dec);
+        println!("std = {:?}", result);
+        println!("fhe = {:?}", result_dec);
 
         assert_eq!(result, result_dec);
 
@@ -230,8 +230,8 @@ fn le_lt_ge_gt() {
         let result_dec = decrypt_bool(&client_key, &result_enc);
 
         println!("ge: {:?}", t);
-        println!("std = \"{:?}\"", result);
-        println!("fhe = \"{:?}\" ", result_dec);
+        println!("std = {:?}", result);
+        println!("fhe = {:?}", result_dec);
 
         assert_eq!(result, result_dec);
 
@@ -243,8 +243,8 @@ fn le_lt_ge_gt() {
         let result_dec = decrypt_bool(&client_key, &result_enc);
 
         println!("gt: {:?}", t);
-        println!("std = \"{:?}\"", result);
-        println!("fhe = \"{:?}\" ", result_dec);
+        println!("std = {:?}", result);
+        println!("fhe = {:?}", result_dec);
 
         assert_eq!(result, result_dec);
     })
@@ -293,8 +293,8 @@ fn eq_ignore_case() {
         let result_dec = decrypt_bool(&client_key, &result_enc);
 
         println!("{:?}", t);
-        println!("std = \"{:?}\"", result);
-        println!("fhe = \"{:?}\" ", result_dec);
+        println!("std = {:?}", result);
+        println!("fhe = {:?}", result_dec);
 
         assert_eq!(result, result_dec);
     });

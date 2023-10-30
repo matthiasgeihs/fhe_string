@@ -35,8 +35,8 @@ fn to_lowercase_to_uppercase() {
         let result_dec = result_enc.decrypt(&client_key);
 
         println!("to_lowercase: {:?}", t);
-        println!("std = \"{:?}\"", result);
-        println!("fhe = \"{:?}\" ", result_dec);
+        println!("std = {:?}", result);
+        println!("fhe = {:?}", result_dec);
 
         assert_eq!(result, result_dec);
 
@@ -47,8 +47,8 @@ fn to_lowercase_to_uppercase() {
         let result_dec = result_enc.decrypt(&client_key);
 
         println!("to_uppercase: {:?}", t);
-        println!("std = \"{:?}\"", result);
-        println!("fhe = \"{:?}\" ", result_dec);
+        println!("std = {:?}", result);
+        println!("fhe = {:?}", result_dec);
 
         assert_eq!(result, result_dec);
     })
