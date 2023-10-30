@@ -6,7 +6,7 @@ use crate::{
 use rayon::prelude::*;
 use tfhe::integer::RadixCiphertext;
 
-pub mod comparison;
+pub mod compare;
 pub mod search;
 #[cfg(test)]
 mod tests;
