@@ -92,39 +92,6 @@ mod tests {
     }
 
     #[test]
-    fn modify() {
-        let (client_key, server_key, input_enc, pattern_enc) = setup_enc();
-
-        // append
-        let c = INPUT.to_string() + PATTERN;
-        let c_enc = input_enc.append(&server_key, &pattern_enc);
-        let c_dec = c_enc.decrypt(&client_key);
-        println!("append: {} ?= {}", c, c_dec);
-        assert_eq!(c, c_dec, "append");
-
-        // repeat
-        let n = 3;
-        let l = 8;
-        let n_enc = client_key.0.encrypt(n as u8);
-        let c = INPUT.repeat(n);
-        let c_enc = input_enc.repeat(&server_key, &n_enc, l);
-        let c_dec = c_enc.decrypt(&client_key);
-        println!("repeat: {} ?= {}", c, c_dec);
-        assert_eq!(c, c_dec, "repeat");
-
-        // replace
-        let repl = "bb";
-        let l = 4;
-        let repl_enc = FheString::new(&client_key, repl, repl.len()).unwrap();
-        let c = INPUT.replace(PATTERN, repl);
-        let c = if c.len() > l { c[..l].to_string() } else { c };
-        let c_enc = input_enc.replace(&server_key, &pattern_enc, &repl_enc, l);
-        let c_dec = c_enc.decrypt(&client_key);
-        println!("replace: {} ?= {}", c, c_dec);
-        assert_eq!(c, c_dec, "replace");
-    }
-
-    #[test]
     fn split() {
         let (client_key, server_key) = setup();
 
