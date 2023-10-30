@@ -1,4 +1,4 @@
-use crate::ciphertext::tests::{decrypt_option_int, decrypt_option_string, encrypt_string, setup};
+use crate::ciphertext::tests::{decrypt_option_string, encrypt_string, setup};
 
 #[test]
 fn trim_trim_start_trim_end() {

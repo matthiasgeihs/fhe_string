@@ -5,6 +5,7 @@ use crate::{client_key::ClientKey, generate_keys, server_key::ServerKey};
 use super::{FheOption, FheString};
 
 mod compare;
+mod replace;
 mod search;
 mod trim;
 
