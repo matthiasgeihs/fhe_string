@@ -5,7 +5,11 @@ use tfhe::integer::RadixCiphertext;
 
 use crate::server_key::ServerKey;
 
-use super::{binary_and, binary_not, binary_or, FheAsciiChar, FheString, Uint};
+use super::{
+    binary_and,
+    logic::{binary_not, binary_or},
+    FheAsciiChar, FheString, Uint,
+};
 
 impl FheString {
     /// Returns whether `self` is empty. The result is an encryption of 1 if
