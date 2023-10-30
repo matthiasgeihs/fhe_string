@@ -1,6 +1,26 @@
+use tfhe::integer::RadixCiphertext;
+
 use crate::server_key::ServerKey;
 
-use super::{binary_and, binary_if_then_else, binary_not, FheOption, FheString};
+use super::{
+    binary_and, binary_if_then_else, binary_not, binary_or, FheAsciiChar, FheOption, FheString,
+    Uint,
+};
+
+impl FheAsciiChar {
+    /// Returns whether this is a whitespace character.
+    pub fn is_whitespace(&self, k: &ServerKey) -> RadixCiphertext {
+        // Whitespace characters: 9 (Horizontal tab), 10 (Line feed), 11
+        // (Vertical tab), 12 (Form feed), 13 (Carriage return), 32 (Space)
+
+        // (9 <= c <= 13) || c == 32
+        let c_geq_9 = k.k.scalar_ge_parallelized(&self.0, 9 as Uint);
+        let c_leq_13 = k.k.scalar_le_parallelized(&self.0, 13 as Uint);
+        let c_geq_9_and_c_leq_13 = k.k.mul_parallelized(&c_geq_9, &c_leq_13);
+        let c_eq_32 = k.k.scalar_eq_parallelized(&self.0, 32 as Uint);
+        binary_or(k, &c_geq_9_and_c_leq_13, &c_eq_32)
+    }
+}
 
 impl FheString {
     /// Returns `self[i..]` where `i` is the index of the first non-whitespace

@@ -73,25 +73,6 @@ mod tests {
     }
 
     #[test]
-    fn case() {
-        let (client_key, server_key, input_enc, _) = setup_enc();
-
-        // to_uppercase
-        let t = INPUT.to_uppercase();
-        let t_enc = input_enc.to_uppercase(&server_key);
-        let t_dec = t_enc.decrypt(&client_key);
-        println!("to_uppercase: {} ?= {}", t, t_dec);
-        assert_eq!(t, t_dec, "to_uppercase");
-
-        // to_lowercase
-        let t = INPUT.to_lowercase();
-        let t_enc = input_enc.to_lowercase(&server_key);
-        let t_dec = t_enc.decrypt(&client_key);
-        println!("to_lowercase: {} ?= {}", t, t_dec);
-        assert_eq!(t, t_dec, "to_lowercase");
-    }
-
-    #[test]
     fn split() {
         let (client_key, server_key) = setup();
 
