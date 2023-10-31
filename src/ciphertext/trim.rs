@@ -1,4 +1,4 @@
-use rayon::join;
+use rayon::{join, prelude::*};
 use tfhe::integer::RadixCiphertext;
 
 use crate::server_key::ServerKey;
@@ -111,5 +111,20 @@ impl FheString {
             is_some,
             val: stripped,
         }
+    }
+
+    /// Returns `self[..index]`.
+    pub fn truncate(&self, k: &ServerKey, index: &RadixCiphertext) -> FheString {
+        let v = self
+            .0
+            .par_iter()
+            .enumerate()
+            .map(|(i, c)| {
+                // a[i] = i < index ? a[i] : 0
+                let i_lt_index = k.k.scalar_gt_parallelized(index, i as Uint);
+                FheAsciiChar(k.k.mul_parallelized(&i_lt_index, &c.0))
+            })
+            .collect();
+        FheString(v)
     }
 }

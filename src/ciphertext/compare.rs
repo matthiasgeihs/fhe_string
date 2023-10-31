@@ -125,28 +125,13 @@ impl FheString {
 
     /// Returns whether `self[i..i+s.len]` and `s` are equal. The result is an
     /// encryption of 1 if this is the case and an encryption of 0 otherwise.
-    ///
-    /// # Panics
-    /// Panics on index out of bounds.
     pub fn substr_eq(&self, k: &ServerKey, i: usize, s: &FheString) -> RadixCiphertext {
         // Extract substring.
-        let a = self.substr_clear(k, i);
         let b = s;
-
-        let mut is_equal = k.create_one();
-        let mut b_terminated = k.create_zero();
-
-        a.0.iter().zip(&b.0).for_each(|(ai, bi)| {
-            // b_terminated = b_terminated || bi == 0
-            let bi_eq_0 = k.k.scalar_eq_parallelized(&bi.0, FheString::TERMINATOR);
-            b_terminated = binary_or(k, &b_terminated, &bi_eq_0);
-
-            // is_equal = is_equal && (ai == bi || b_terminated)
-            let ai_eq_bi = k.k.eq_parallelized(&ai.0, &bi.0);
-            let ai_eq_bi_or_bterm = binary_or(k, &ai_eq_bi, &b_terminated);
-            is_equal = k.k.mul_parallelized(&is_equal, &ai_eq_bi_or_bterm);
-        });
-        binary_and(k, &is_equal, &b_terminated)
+        let b_len = b.len(k);
+        let a = self.substr_clear(k, i);
+        let a = a.truncate(k, &b_len);
+        a.eq(k, b)
     }
 
     /// Returns `self[i..]`. If `i >= self.len`, returns the empty string.

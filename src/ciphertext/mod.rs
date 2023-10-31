@@ -158,21 +158,6 @@ impl FheString {
         FheString(v)
     }
 
-    /// Returns `self[..index]`.
-    pub fn truncate(&self, k: &ServerKey, index: &RadixCiphertext) -> FheString {
-        let v = self
-            .0
-            .par_iter()
-            .enumerate()
-            .map(|(i, c)| {
-                // a[i] = i < index ? a[i] : 0
-                let i_lt_index = k.k.scalar_gt_parallelized(index, i as Uint);
-                FheAsciiChar(k.k.mul_parallelized(&i_lt_index, &c.0))
-            })
-            .collect();
-        FheString(v)
-    }
-
     /// Returns the character at the given index. Returns 0 if the index is out
     /// of bounds.
     pub fn char_at(&self, k: &ServerKey, i: &RadixCiphertext) -> FheAsciiChar {
