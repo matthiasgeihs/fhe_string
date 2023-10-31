@@ -1,3 +1,4 @@
+use rayon::prelude::*;
 use tfhe::integer::RadixCiphertext;
 
 use crate::server_key::ServerKey;
@@ -46,14 +47,14 @@ impl FheString {
     /// Returns a copy of `self` where uppercase characters have been replaced
     /// by their lowercase counterparts.
     pub fn to_lowercase(&self, k: &ServerKey) -> FheString {
-        let v = self.0.iter().map(|c| c.to_lowercase(k)).collect();
+        let v = self.0.par_iter().map(|c| c.to_lowercase(k)).collect();
         FheString(v)
     }
 
     /// Returns a copy of `self` where lowercase characters have been replaced
     /// by their uppercase counterparts.
     pub fn to_uppercase(&self, k: &ServerKey) -> FheString {
-        let v = self.0.iter().map(|c| c.to_uppercase(k)).collect();
+        let v = self.0.par_iter().map(|c| c.to_uppercase(k)).collect();
         FheString(v)
     }
 }
