@@ -6,7 +6,9 @@ use crate::{
     server_key::ServerKey,
 };
 
-use super::{binary_and, FheAsciiChar, FheOption, FheString};
+use super::{
+    binary_and, index_of_unchecked, rindex_of_unchecked, FheAsciiChar, FheOption, FheString,
+};
 
 impl FheString {
     /// Returns whether `self` contains the string `s`. The result is an
@@ -17,34 +19,15 @@ impl FheString {
 
     /// Returns the index of the first occurrence of `s`, if existent.
     pub fn find(&self, k: &ServerKey, s: &FheString) -> FheOption<RadixCiphertext> {
-        let zero = k.create_zero();
-        let mut b = zero.clone(); // Pattern contained.
-        let mut index = zero.clone(); // Pattern index.
+        let found = self.find_all(k, s);
 
-        (0..self.0.len() - 1).for_each(|i| {
-            log::debug!("find: at index {i}");
-
-            // eq = self[i..i+s.len] == s
-            let eq = self.substr_eq(k, i, s);
-
-            // index = b ? index : (eq ? i : 0)
-            let eq_mul_i = k.k.scalar_mul_parallelized(&eq, i as Uint);
-            index = binary_if_then_else(k, &b, &index, &eq_mul_i);
-
-            // b = b || eq
-            b = binary_or(&k, &b, &eq);
-        });
-        FheOption {
-            is_some: b,
-            val: index,
-        }
+        // Determine index of first match.
+        index_of_unchecked(k, &found, |_k, x| x.clone())
     }
 
     /// Returns a vector v of length self.max_len where the i-th entry is an
     /// encryption of 1 if the substring of self starting from i matches s, and
     /// an encryption of 0 otherwise.
-    ///
-    /// Formally: v[i] = self.substr_eq(k, i, s)
     pub(super) fn find_all(&self, k: &ServerKey, s: &FheString) -> Vec<RadixCiphertext> {
         (0..self.0.len() - 1)
             .into_par_iter()
@@ -168,27 +151,10 @@ impl FheString {
 
     /// Returns the index of the last occurence of `s`, if existent.
     pub fn rfind(&self, k: &ServerKey, s: &FheString) -> FheOption<RadixCiphertext> {
-        let zero = k.create_zero();
-        let mut b = zero.clone(); // Pattern contained.
-        let mut index = zero.clone(); // Pattern index.
+        let found = self.find_all(k, s);
 
-        (0..self.max_len()).rev().for_each(|i| {
-            log::debug!("rfind: at index {i}");
-
-            // eq = self[i..i+s.len] == s
-            let eq = self.substr_eq(k, i, s);
-
-            // index = b ? index : (eq ? i : 0)
-            let eq_mul_i = k.k.scalar_mul_parallelized(&eq, i as Uint);
-            index = binary_if_then_else(k, &b, &index, &eq_mul_i);
-
-            // b = b || eq
-            b = binary_or(&k, &b, &eq);
-        });
-        FheOption {
-            is_some: b,
-            val: index,
-        }
+        // Determine index of first match in reversed order.
+        rindex_of_unchecked(k, &found, |_k, x| x.clone())
     }
 
     /// Searches `self` for the first index `j >= i` with `p(self[j]) == 1`.

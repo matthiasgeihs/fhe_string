@@ -241,6 +241,68 @@ pub fn element_at(k: &ServerKey, v: &[RadixCiphertext], i: &RadixCiphertext) -> 
         .unwrap_or(k.create_zero())
 }
 
+/// Searches `v` for the first index `i` with `p(v[i]) == 1`.
+///
+/// Expects that `p` returns an encryption of either 0 or 1.
+pub fn index_of_unchecked<T>(
+    k: &ServerKey,
+    v: &[T],
+    p: fn(&ServerKey, &T) -> RadixCiphertext,
+) -> FheOption<RadixCiphertext> {
+    index_of_unchecked_with_options(k, v, p, false)
+}
+
+/// Searches `v` for the last index `i` with `p(v[i]) == 1`.
+///
+/// Expects that `p` returns an encryption of either 0 or 1.
+pub fn rindex_of_unchecked<T>(
+    k: &ServerKey,
+    v: &[T],
+    p: fn(&ServerKey, &T) -> RadixCiphertext,
+) -> FheOption<RadixCiphertext> {
+    index_of_unchecked_with_options(k, v, p, true)
+}
+
+/// Searches `v` for the first index `i` with `p(v[i]) == 1`. If `reverse`,
+/// searches in reverse direction.
+///
+/// Expects that `p` returns an encryption of either 0 or 1.
+fn index_of_unchecked_with_options<T>(
+    k: &ServerKey,
+    v: &[T],
+    p: fn(&ServerKey, &T) -> RadixCiphertext,
+    reverse: bool,
+) -> FheOption<RadixCiphertext> {
+    let zero = k.create_zero();
+    let mut b = zero.clone(); // Pattern contained.
+    let mut index = zero.clone(); // Pattern index.
+
+    let items: Vec<_> = if reverse {
+        v.iter().enumerate().rev().collect()
+    } else {
+        v.iter().enumerate().collect()
+    };
+
+    items.iter().for_each(|(i, vi)| {
+        log::debug!("index_of_opt_unchecked: at index {i}");
+
+        // pi = p(v[i])
+        let pi = p(k, vi);
+
+        // index = b ? index : (pi ? i : 0)
+        let pi_mul_i = k.k.scalar_mul_parallelized(&pi, *i as Uint);
+        index = binary_if_then_else(k, &b, &index, &pi_mul_i);
+
+        // b = b || pi
+        b = binary_or(&k, &b, &pi);
+    });
+
+    FheOption {
+        is_some: b,
+        val: index,
+    }
+}
+
 pub struct FheOption<T> {
     pub is_some: RadixCiphertext,
     pub val: T,
