@@ -1,10 +1,11 @@
+use rayon::join;
 use tfhe::integer::RadixCiphertext;
 
 use crate::server_key::ServerKey;
 
 use super::{
-    binary_and, binary_if_then_else, binary_not, binary_or, FheAsciiChar, FheOption, FheString,
-    Uint,
+    binary_and, binary_if_then_else, binary_not, binary_or, index_of_unchecked,
+    rindex_of_unchecked, FheAsciiChar, FheOption, FheString, Uint,
 };
 
 impl FheAsciiChar {
@@ -57,8 +58,28 @@ impl FheString {
     /// non-whitespace character and `j` is the index of the last non-whitespace
     /// character.
     pub fn trim(&self, k: &ServerKey) -> FheString {
-        let ltrim = self.trim_start(k);
-        ltrim.trim_end(k)
+        let found = self.find_all_pred_unchecked(k, |k, c| {
+            // !is_terminator(c) && !is_whitespace(c)
+            let is_term = k.k.scalar_eq_parallelized(&c.0, Self::TERMINATOR);
+            let not_term = binary_not(k, &is_term);
+            let is_whitespace = c.is_whitespace(k);
+            let not_whitespace = binary_not(k, &is_whitespace);
+            binary_and(k, &not_term, &not_whitespace)
+        });
+
+        let (index_start, index_end) = join(
+            || index_of_unchecked(k, &found, |_, x| x.clone()),
+            || rindex_of_unchecked(k, &found, |_, x| x.clone()),
+        );
+
+        // Truncate end.
+        let val_add_1 = k.k.scalar_add_parallelized(&index_end.val, 1);
+        let i = binary_if_then_else(k, &index_end.is_some, &val_add_1, &k.create_zero());
+        let s = self.truncate(k, &i);
+
+        // Truncate start.
+        let i = binary_if_then_else(k, &index_start.is_some, &index_start.val, &k.create_zero());
+        s.substr(k, &i)
     }
 
     /// Returns a copy of `self` where the start of `self` is stripped if it is

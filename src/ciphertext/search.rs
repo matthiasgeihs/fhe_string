@@ -2,7 +2,7 @@ use rayon::prelude::*;
 use tfhe::integer::RadixCiphertext;
 
 use crate::{
-    ciphertext::{binary_if_then_else, binary_or, Uint},
+    ciphertext::{binary_if_then_else, Uint},
     server_key::ServerKey,
 };
 
@@ -166,32 +166,14 @@ impl FheString {
         i: usize,
         p: fn(&ServerKey, &FheAsciiChar) -> RadixCiphertext,
     ) -> FheOption<RadixCiphertext> {
-        let zero = k.create_zero();
-        let mut b = zero.clone(); // Pattern contained.
-        let mut index = zero.clone(); // Pattern index.
-
-        self.0
-            .get(i..)
-            .unwrap_or_default()
-            .iter()
-            .enumerate()
-            .for_each(|(j, c)| {
-                let j = j + i;
-                log::debug!("find_next_pred: at index {j}");
-
-                // pj = p(self[j])
-                let pj = p(k, c);
-
-                // index = b ? index : (pj ? j : 0)
-                let pj_mul_j = k.k.scalar_mul_parallelized(&pj, j as Uint);
-                index = binary_if_then_else(k, &b, &index, &pj_mul_j);
-
-                // b = b || pi
-                b = binary_or(&k, &b, &pj);
-            });
+        // Search substring.
+        let subvec = &self.0.get(i..).unwrap_or_default();
+        let index = index_of_unchecked(k, &subvec, p);
+        // Add offset.
+        let val = k.k.scalar_add_parallelized(&index.val, i as Uint);
         FheOption {
-            is_some: b,
-            val: index,
+            is_some: index.is_some,
+            val,
         }
     }
 
@@ -203,7 +185,7 @@ impl FheString {
         k: &ServerKey,
         p: fn(&ServerKey, &FheAsciiChar) -> RadixCiphertext,
     ) -> FheOption<RadixCiphertext> {
-        self.find_next_pred_unchecked(k, 0, p)
+        index_of_unchecked(k, &self.0, p)
     }
 
     /// Searches `self` for the first index `i` with `p(self[i]) == 1` in
@@ -215,27 +197,7 @@ impl FheString {
         k: &ServerKey,
         p: fn(&ServerKey, &FheAsciiChar) -> RadixCiphertext,
     ) -> FheOption<RadixCiphertext> {
-        let zero = k.create_zero();
-        let mut b = zero.clone(); // Pattern contained.
-        let mut index = zero.clone(); // Pattern index.
-
-        self.0.iter().enumerate().rev().for_each(|(i, c)| {
-            log::debug!("rfind_char: at index {i}");
-
-            // pi = p(self[i])
-            let pi = p(k, c);
-
-            // index = b ? index : (pi ? i : 0)
-            let pi_mul_i = k.k.scalar_mul_parallelized(&pi, i as Uint);
-            index = binary_if_then_else(k, &b, &index, &pi_mul_i);
-
-            // b = b || pi
-            b = binary_or(&k, &b, &pi);
-        });
-        FheOption {
-            is_some: b,
-            val: index,
-        }
+        rindex_of_unchecked(k, &self.0, p)
     }
 
     /// Returns whether `self` starts with the string `s`. The result is an

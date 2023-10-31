@@ -244,7 +244,7 @@ pub fn element_at(k: &ServerKey, v: &[RadixCiphertext], i: &RadixCiphertext) -> 
 /// Searches `v` for the first index `i` with `p(v[i]) == 1`.
 ///
 /// Expects that `p` returns an encryption of either 0 or 1.
-pub fn index_of_unchecked<T>(
+pub fn index_of_unchecked<T: Sync>(
     k: &ServerKey,
     v: &[T],
     p: fn(&ServerKey, &T) -> RadixCiphertext,
@@ -255,7 +255,7 @@ pub fn index_of_unchecked<T>(
 /// Searches `v` for the last index `i` with `p(v[i]) == 1`.
 ///
 /// Expects that `p` returns an encryption of either 0 or 1.
-pub fn rindex_of_unchecked<T>(
+pub fn rindex_of_unchecked<T: Sync>(
     k: &ServerKey,
     v: &[T],
     p: fn(&ServerKey, &T) -> RadixCiphertext,
@@ -267,7 +267,7 @@ pub fn rindex_of_unchecked<T>(
 /// searches in reverse direction.
 ///
 /// Expects that `p` returns an encryption of either 0 or 1.
-fn index_of_unchecked_with_options<T>(
+fn index_of_unchecked_with_options<T: Sync>(
     k: &ServerKey,
     v: &[T],
     p: fn(&ServerKey, &T) -> RadixCiphertext,
@@ -283,11 +283,12 @@ fn index_of_unchecked_with_options<T>(
         v.iter().enumerate().collect()
     };
 
-    items.iter().for_each(|(i, vi)| {
-        log::debug!("index_of_opt_unchecked: at index {i}");
+    // Evaluate predicate `p` on each element of `v`.
+    let p_eval: Vec<_> = items.par_iter().map(|(i, x)| (i, p(k, x))).collect();
 
-        // pi = p(v[i])
-        let pi = p(k, vi);
+    // Find first index for which predicate evaluated to 1.
+    p_eval.into_iter().for_each(|(i, pi)| {
+        log::debug!("index_of_opt_unchecked: at index {i}");
 
         // index = b ? index : (pi ? i : 0)
         let pi_mul_i = k.k.scalar_mul_parallelized(&pi, *i as Uint);
