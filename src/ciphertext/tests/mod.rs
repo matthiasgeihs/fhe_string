@@ -62,3 +62,44 @@ fn decrypt_option_string(k: &ClientKey, opt: &FheOption<FheString>) -> Option<St
         _ => panic!("expected 0 or 1, got {}", is_some),
     }
 }
+
+#[test]
+fn len() {
+    let (client_key, server_key) = setup();
+
+    #[derive(Debug)]
+    struct TestCase<'a> {
+        input: &'a str,
+        pad: Option<usize>,
+    }
+
+    let test_cases = vec![
+        TestCase {
+            input: "",
+            pad: None,
+        },
+        TestCase {
+            input: "abc",
+            pad: None,
+        },
+        TestCase {
+            input: "abc",
+            pad: Some(8),
+        },
+    ];
+
+    test_cases.iter().for_each(|t| {
+        let input_enc = encrypt_string(&client_key, t.input, t.pad);
+
+        let result = t.input.len();
+
+        let result_enc = input_enc.len(&server_key);
+        let result_dec = client_key.0.decrypt::<u64>(&result_enc) as usize;
+
+        println!("{:?}", t);
+        println!("std = {:?}", result);
+        println!("fhe = {:?}", result_dec);
+
+        assert_eq!(result, result_dec);
+    })
+}
