@@ -64,6 +64,15 @@ fn decrypt_option_string(k: &ClientKey, opt: &FheOption<FheString>) -> Option<St
 }
 
 #[test]
+fn zero_term() {
+    // `FheString::TERMINATOR` was added after the fact. Previously, the code
+    // did just assume that this is zero. Therefore we check this here. Removing
+    // this check would require a careful analysis of the code that it does not
+    // rely on this equality anymore.
+    assert_eq!(FheString::TERMINATOR, 0);
+}
+
+#[test]
 fn len() {
     let (client_key, server_key) = setup();
 
