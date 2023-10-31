@@ -101,6 +101,12 @@ fn eq_ne() {
             b: "",
             b_pad: None,
         },
+        TestCase {
+            a: "",
+            a_pad: None,
+            b: "",
+            b_pad: None,
+        },
     ];
 
     test_cases.iter().for_each(|t| {

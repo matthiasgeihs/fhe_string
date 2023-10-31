@@ -1,13 +1,11 @@
 use crate::{
-    ciphertext::logic::{binary_not, binary_or},
+    ciphertext::logic::{binary_and, binary_if_then_else, binary_not, binary_or},
     client_key::{ClientKey, Key},
     error::Error,
     server_key::ServerKey,
 };
 use rayon::prelude::*;
 use tfhe::integer::RadixCiphertext;
-
-use self::logic::{binary_and, binary_if_then_else};
 
 pub mod compare;
 pub mod convert;

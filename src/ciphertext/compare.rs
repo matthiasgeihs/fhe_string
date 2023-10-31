@@ -1,14 +1,13 @@
 use std::cmp;
 
-use rayon::prelude::*;
+use rayon::{join, prelude::*};
 use tfhe::integer::RadixCiphertext;
 
 use crate::server_key::ServerKey;
 
 use super::{
-    binary_and,
-    logic::{binary_not, binary_or},
-    FheAsciiChar, FheString, Uint,
+    logic::{binary_and, binary_and_vec, binary_not, binary_or},
+    FheAsciiChar, FheString,
 };
 
 impl FheString {
@@ -27,19 +26,14 @@ impl FheString {
         let a = self.pad(k, l);
         let b = s.pad(k, l);
 
-        // is_eq = is_eq && ai == bi
-        let b =
+        // is_eq[i] = a[i] == b[i]
+        let is_eq =
             a.0.par_iter()
                 .zip(b.0)
                 .map(|(ai, bi)| k.k.eq_parallelized(&ai.0, &bi.0))
                 .collect::<Vec<_>>();
-        match k.k.unchecked_sum_ciphertexts_vec_parallelized(b) {
-            None => k.create_zero(),
-            Some(sum) => {
-                let len = &k.create_value(a.0.len() as Uint);
-                k.k.eq_parallelized(&sum, &len)
-            }
-        }
+
+        binary_and_vec(k, &is_eq)
     }
 
     /// Returns `self != s`. The result is an encryption of 1 if this is the
@@ -65,16 +59,20 @@ impl FheString {
         let b = s.pad(k, l);
 
         // Evaluate comparison for each character.
-        let a_lt_b =
-            a.0.par_iter()
-                .zip(&b.0)
-                .map(|(ai, bi)| k.k.lt_parallelized(&ai.0, &bi.0))
-                .collect::<Vec<_>>();
-        let a_eq_b =
-            a.0.par_iter()
-                .zip(&b.0)
-                .map(|(ai, bi)| k.k.eq_parallelized(&ai.0, &bi.0))
-                .collect::<Vec<_>>();
+        let (a_lt_b, a_eq_b) = join(
+            || {
+                a.0.par_iter()
+                    .zip(&b.0)
+                    .map(|(ai, bi)| k.k.lt_parallelized(&ai.0, &bi.0))
+                    .collect::<Vec<_>>()
+            },
+            || {
+                a.0.par_iter()
+                    .zip(&b.0)
+                    .map(|(ai, bi)| k.k.eq_parallelized(&ai.0, &bi.0))
+                    .collect::<Vec<_>>()
+            },
+        );
 
         let mut is_lt = k.create_zero();
         let mut is_eq = k.create_one();
@@ -112,17 +110,17 @@ impl FheString {
         let a = self.pad(k, l);
         let b = s.pad(k, l);
 
-        let one = k.create_one();
-        let mut is_equal = one.clone();
+        let v: Vec<_> =
+            a.0.par_iter()
+                .zip(&b.0)
+                .map(|(ai, bi)| {
+                    let ai_low = ai.to_lowercase(k);
+                    let bi_low = bi.to_lowercase(k);
+                    k.k.eq_parallelized(&ai_low.0, &bi_low.0)
+                })
+                .collect();
 
-        // is_equal = is_equal && ai.lower == bi.lower
-        a.0.iter().zip(b.0).for_each(|(ai, bi)| {
-            let ai_lower = ai.to_lowercase(k);
-            let bi_lower = bi.to_lowercase(k);
-            let ai_eq_bi = k.k.eq_parallelized(&ai_lower.0, &bi_lower.0);
-            is_equal = k.k.mul_parallelized(&is_equal, &ai_eq_bi);
-        });
-        is_equal
+        binary_and_vec(k, &v)
     }
 
     /// Returns whether `self[i..i+s.len]` and `s` are equal. The result is an
