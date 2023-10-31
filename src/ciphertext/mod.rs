@@ -214,9 +214,9 @@ impl FheString {
         }
 
         let mut v = self.0.to_vec();
-        let zero = FheAsciiChar(k.create_zero());
+        let term = FheAsciiChar(k.create_value(Self::TERMINATOR));
         // l + 1 because of termination character.
-        (0..l + 1 - self.0.len()).for_each(|_| v.push(zero.clone()));
+        (0..l + 1 - self.0.len()).for_each(|_| v.push(term.clone()));
         FheString(v)
     }
 }

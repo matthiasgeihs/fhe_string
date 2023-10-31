@@ -60,26 +60,32 @@ impl FheString {
     /// and an encryption of 0 otherwise.
     pub fn lt(&self, k: &ServerKey, s: &FheString) -> RadixCiphertext {
         // Pad to same length.
-        let l = if self.0.len() > s.0.len() {
-            self.0.len()
-        } else {
-            s.0.len()
-        };
+        let l = cmp::max(self.max_len(), s.max_len());
         let a = self.pad(k, l);
         let b = s.pad(k, l);
+
+        // Evaluate comparison for each character.
+        let a_lt_b =
+            a.0.par_iter()
+                .zip(&b.0)
+                .map(|(ai, bi)| k.k.lt_parallelized(&ai.0, &bi.0))
+                .collect::<Vec<_>>();
+        let a_eq_b =
+            a.0.par_iter()
+                .zip(&b.0)
+                .map(|(ai, bi)| k.k.eq_parallelized(&ai.0, &bi.0))
+                .collect::<Vec<_>>();
 
         let mut is_lt = k.create_zero();
         let mut is_eq = k.create_one();
 
         // is_lt = is_lt || ai < bi
-        a.0.iter().zip(b.0).for_each(|(ai, bi)| {
+        a_lt_b.iter().zip(&a_eq_b).for_each(|(ai_lt_bi, ai_eq_bi)| {
             // is_lt = is_lt || ai < bi && is_eq
-            let ai_lt_bi = k.k.lt_parallelized(&ai.0, &bi.0);
-            let ai_lt_bi_and_eq = binary_and(k, &ai_lt_bi, &is_eq);
+            let ai_lt_bi_and_eq = binary_and(k, ai_lt_bi, &is_eq);
             is_lt = binary_or(k, &is_lt, &ai_lt_bi_and_eq);
 
             // is_eq = is_eq && ai == bi
-            let ai_eq_bi = k.k.le_parallelized(&ai.0, &bi.0);
             is_eq = k.k.mul_parallelized(&is_eq, &ai_eq_bi);
         });
         is_lt
@@ -101,17 +107,12 @@ impl FheString {
     /// is an encryption of 1 if this is the case and an encryption of 0
     /// otherwise.
     pub fn eq_ignore_ascii_case(&self, k: &ServerKey, s: &FheString) -> RadixCiphertext {
-        let one = k.create_one();
-
         // Pad to same length.
-        let l = if self.0.len() > s.0.len() {
-            self.0.len()
-        } else {
-            s.0.len()
-        };
+        let l = cmp::max(self.max_len(), s.max_len());
         let a = self.pad(k, l);
         let b = s.pad(k, l);
 
+        let one = k.create_one();
         let mut is_equal = one.clone();
 
         // is_equal = is_equal && ai.lower == bi.lower
