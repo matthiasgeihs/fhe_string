@@ -16,10 +16,10 @@ use super::{
 };
 
 /// An element of an `FheStringSliceVector`.
+#[derive(Clone)]
 struct FheStringSlice {
-    /// Defines whether this is an actual entry in a string slice vector. If
-    /// this is zero, then this is just a dummy entry.
-    is_start: RadixCiphertext,
+    /// The start index of the string slice.
+    start: RadixCiphertext,
 
     /// The end index of the string slice, exclusive.
     end: RadixCiphertext,
@@ -30,15 +30,9 @@ pub struct FheStringSliceVector {
     /// The reference string.
     s: FheString,
 
-    /// The substring vector. For each character of the string, it indicates
-    /// whether a substring starting from this character is contained in the
-    /// vector and what the length of that substring is.
-    ///
-    /// Formally: for each i in 0..s.vlen: v[i] = (is_start_i, end_i)
-    v: Vec<FheStringSlice>,
-
-    // Indicates whether elements are indexed in reverse order.
-    reverse: bool,
+    /// The vector of substrings. Since we can't always know the real length of
+    /// a vector, we use optional elements. `None` elements are skipped.
+    v: Vec<FheOption<FheStringSlice>>,
 }
 
 impl FheStringSliceVector {
@@ -47,7 +41,7 @@ impl FheStringSliceVector {
         let v = self
             .v
             .par_iter()
-            .map(|vi| vi.is_start.clone())
+            .map(|vi| vi.is_some.clone())
             .collect::<Vec<_>>();
         k.k.unchecked_sum_ciphertexts_vec_parallelized(v)
             .unwrap_or(k.create_zero())
@@ -60,37 +54,30 @@ impl FheStringSliceVector {
         let init = FheOption {
             is_some: k.create_zero(),
             val: FheStringSlice {
-                is_start: k.create_zero(), // This will hold the starting index.
+                start: k.create_zero(),
                 end: k.create_zero(),
             },
         };
 
-        let mut iter_items = self.v.iter().enumerate().collect::<Vec<_>>();
-        if self.reverse {
-            iter_items.reverse()
-        }
-        let slice = iter_items.iter().fold(init, |acc, (j, vi)| {
-            // acc = i == n && vi.is_start ? (j, vi.end) : acc
+        let slice = self.v.iter().enumerate().fold(init, |acc, (j, vi)| {
+            // acc = i == n && vi.is_some ? (j, vi.end) : acc
             let i_eq_n = k.k.eq_parallelized(i, &n);
-            let is_some = binary_and(k, &i_eq_n, &vi.is_start);
-            let j_radix = k.create_value(*j as Uint);
-            let start = binary_if_then_else(k, &is_some, &j_radix, &acc.val.is_start);
-            let end = binary_if_then_else(k, &is_some, &vi.end, &acc.val.end);
+            let is_some = binary_and(k, &i_eq_n, &vi.is_some);
+            let j_radix = k.create_value(j as Uint);
+            let start = binary_if_then_else(k, &is_some, &j_radix, &acc.val.start);
+            let end = binary_if_then_else(k, &is_some, &vi.val.end, &acc.val.end);
             let acc = FheOption {
                 is_some,
-                val: FheStringSlice {
-                    is_start: start,
-                    end,
-                },
+                val: FheStringSlice { start, end },
             };
 
-            // n += 1
-            k.k.add_assign_parallelized(&mut n, &vi.is_start);
+            // n += vi.is_some
+            k.k.add_assign_parallelized(&mut n, &vi.is_some);
 
             acc
         });
 
-        let val = self.s.substr_end(k, &slice.val.is_start, &slice.val.end);
+        let val = self.s.substr_end(k, &slice.val.start, &slice.val.end);
         FheOption {
             is_some: slice.is_some,
             val,
@@ -108,169 +95,138 @@ impl FheStringSliceVector {
         let mut n = k.create_zero();
         let zero = k.create_zero();
 
-        let iter_items = self.v.iter();
-        let iter_items = if self.reverse {
-            iter_items.rev().collect::<Vec<_>>()
-        } else {
-            iter_items.collect::<Vec<_>>()
-        };
-
-        self.v = iter_items
+        self.v = self
+            .v
             .iter()
             .map(|vi| {
-                // is_start = n < i ? vi.is_start : 0
+                // is_some = n < i ? vi.is_some : 0
                 let n_lt_i = k.k.lt_parallelized(&n, &i);
-                let is_start = binary_if_then_else(k, &n_lt_i, &vi.is_start, &zero);
+                let is_some = binary_if_then_else(k, &n_lt_i, &vi.is_some, &zero);
 
-                // n += v[i].is_start
-                k.k.add_assign_parallelized(&mut n, &vi.is_start);
+                // n += v[i].is_some
+                k.k.add_assign_parallelized(&mut n, &vi.is_some);
 
-                FheStringSlice {
-                    is_start,
-                    end: vi.end.clone(),
+                FheOption {
+                    is_some,
+                    val: vi.val.clone(),
                 }
             })
             .collect::<Vec<_>>();
-
-        if self.reverse {
-            self.v.reverse();
-        }
     }
 
     /// Truncate the last element if it is empty.
     fn truncate_last_if_empty(&mut self, k: &ServerKey) {
-        let s_len = self.s.len(k);
         let mut b = k.create_one();
-
-        let iter_items = self.v.iter().enumerate();
-        let iter_items = if self.reverse {
-            iter_items.collect::<Vec<_>>()
-        } else {
-            iter_items.rev().collect::<Vec<_>>()
-        };
-
-        let mut v = iter_items
+        let mut v = self
+            .v
             .iter()
-            .map(|(i, vi)| {
-                log::debug!("truncate_last_if_empty: i = {}", i);
+            .rev()
+            .map(|vi| {
+                // is_empty = vi.start >= vi.end
+                let is_empty = k.k.ge_parallelized(&vi.val.start, &vi.val.end);
 
-                // is_empty = vi.end <= i || s.len <= i
-                let end_le_i = k.k.scalar_le_parallelized(&vi.end, *i as Uint);
-                let slen_le_i = k.k.scalar_le_parallelized(&s_len, *i as Uint);
-                let is_empty = binary_or(k, &end_le_i, &slen_le_i);
-
-                // is_start = b && vi.is_start && is_empty ? 0 : vi.is_start
-                let b_and_start = binary_and(k, &b, &vi.is_start);
+                // is_some = b && vi.is_some && is_empty ? 0 : vi.is_some
+                let b_and_start = binary_and(k, &b, &vi.is_some);
                 let b_and_start_and_empty = binary_and(k, &b_and_start, &is_empty);
-                let is_start =
-                    binary_if_then_else(k, &b_and_start_and_empty, &k.create_zero(), &vi.is_start);
+                let is_some =
+                    binary_if_then_else(k, &b_and_start_and_empty, &k.create_zero(), &vi.is_some);
 
-                // b = b && !vi.is_start
-                let not_start = binary_not(k, &vi.is_start);
+                // b = b && !vi.is_some
+                let not_start = binary_not(k, &vi.is_some);
                 b = binary_and(k, &b, &not_start);
 
-                FheStringSlice {
-                    is_start,
-                    end: vi.end.clone(),
+                FheOption {
+                    is_some,
+                    val: vi.val.clone(),
                 }
             })
             .collect::<Vec<_>>();
-        if !self.reverse {
-            v.reverse();
-        }
+        v.reverse();
         self.v = v;
+    }
+
+    /// Expand the first slice to the beginning of the string.
+    fn expand_first(&mut self, k: &ServerKey) {
+        // Find the first item and set its start point to 0.
+        let mut not_found = k.create_one();
+        let zero = k.create_zero();
+        self.v = self
+            .v
+            .iter()
+            .map(|vi| {
+                // start = not_found && vi.is_some ? 0 : vi.start
+                let not_found_and_some = binary_and(k, &not_found, &vi.is_some);
+                let start = binary_if_then_else(k, &not_found_and_some, &zero, &vi.val.start);
+
+                // not_found = not_found && !vi.is_some
+                let not_some = binary_not(k, &vi.is_some);
+                not_found = binary_and(k, &not_found, &not_some);
+
+                FheOption {
+                    is_some: vi.is_some.clone(),
+                    val: FheStringSlice {
+                        start,
+                        end: vi.val.end.clone(),
+                    },
+                }
+            })
+            .collect::<Vec<_>>();
     }
 
     /// Expand the last slice to the end of the string.
     fn expand_last(&mut self, k: &ServerKey) {
-        self.v = if self.reverse {
-            // Find the first encrypted item, store its end point, and disable
-            // it. Enable the first cleartext item and set its end point to the
-            // stored end point.
-            let mut not_found = k.create_one();
-            let mut end = k.create_value(self.s.max_len() as Uint);
-            let zero = k.create_zero();
-            let mut v = self
-                .v
-                .iter()
-                .map(|vi| {
-                    // is_start = not_found && vi.is_start ? 0 : vi.is_start
-                    let not_found_and_start = binary_and(k, &not_found, &vi.is_start);
-                    let is_start =
-                        binary_if_then_else(k, &not_found_and_start, &zero, &vi.is_start);
-                    end = binary_if_then_else(k, &not_found_and_start, &vi.end, &end);
+        // Find the last item and set its end point to s.max_len.
+        let mut not_found = k.create_one();
+        let mut v = self
+            .v
+            .iter()
+            .rev()
+            .map(|vi| {
+                // end = not_found && vi.is_some ? self.s.max_len : vi.end
+                let not_found_and_some = binary_and(k, &not_found, &vi.is_some);
+                let max_len = k.create_value(self.s.max_len() as Uint);
+                let end = binary_if_then_else(k, &not_found_and_some, &max_len, &vi.val.end);
 
-                    // not_found = not_found && !vi.is_start
-                    let not_start = binary_not(k, &vi.is_start);
-                    not_found = binary_and(k, &not_found, &not_start);
+                // not_found = not_found && !vi.is_some
+                let not_some = binary_not(k, &vi.is_some);
+                not_found = binary_and(k, &not_found, &not_some);
 
-                    FheStringSlice {
-                        is_start,
-                        end: vi.end.clone(),
-                    }
-                })
-                .collect::<Vec<_>>();
-            if let Some(v0) = v.get_mut(0) {
-                v0.is_start = k.create_one();
-                v0.end = end;
-            }
-            v
-        } else {
-            // Find the last item and set its end point to s.max_len.
-            let mut not_found = k.create_one();
-            let mut v = self
-                .v
-                .iter()
-                .rev()
-                .map(|vi| {
-                    // end = not_found && vi.is_start ? self.s.max_len : vi.end
-                    let not_found_and_start = binary_and(k, &not_found, &vi.is_start);
-                    let max_len = k.create_value(self.s.max_len() as Uint);
-                    let end = binary_if_then_else(k, &not_found_and_start, &max_len, &vi.end);
-
-                    // not_found = not_found && !vi.is_start
-                    let not_start = binary_not(k, &vi.is_start);
-                    not_found = binary_and(k, &not_found, &not_start);
-
-                    FheStringSlice {
-                        is_start: vi.is_start.clone(),
+                FheOption {
+                    is_some: vi.is_some.clone(),
+                    val: FheStringSlice {
+                        start: vi.val.start.clone(),
                         end,
-                    }
-                })
-                .collect::<Vec<_>>();
-            v.reverse();
-            v
-        };
+                    },
+                }
+            })
+            .collect::<Vec<_>>();
+        v.reverse();
+        self.v = v;
     }
 
     /// Decrypts this vector.
     pub fn decrypt(&self, k: &ClientKey) -> Vec<String> {
         let s_dec = self.s.decrypt(k);
-        let mut v = self
-            .v
+        self.v
             .iter()
-            .enumerate()
-            .filter_map(|(i, vi)| {
-                let is_start = k.0.decrypt::<Uint>(&vi.is_start);
-                match is_start {
+            .filter_map(|vi| {
+                let is_some = k.0.decrypt::<Uint>(&vi.is_some);
+                match is_some {
                     0 => None,
                     _ => {
-                        let end = k.0.decrypt::<Uint>(&vi.end) as usize;
-                        let slice = s_dec.get(i..end).unwrap_or_default();
+                        let start = k.0.decrypt::<Uint>(&vi.val.start) as usize;
+                        let end = k.0.decrypt::<Uint>(&vi.val.end) as usize;
+                        let slice = s_dec.get(start..end).unwrap_or_default();
                         Some(slice.to_string())
                     }
                 }
             })
-            .collect::<Vec<_>>();
-        if self.reverse {
-            v.reverse();
-        }
-        v
+            .collect::<Vec<_>>()
     }
 
     /// Reverses the order of the elements.
     pub fn reverse(&mut self) {
-        self.reverse = !self.reverse;
+        self.v.reverse();
     }
 }
 
@@ -311,8 +267,8 @@ impl FheString {
             .map(|i| {
                 log::debug!("split_opt: at index {i}");
 
-                // is_start_i = i == 0 || matches[i - p.len]
-                let is_start = if i == 0 {
+                // is_some_i = i == 0 || matches[i - p.len]
+                let is_some = if i == 0 {
                     k.create_one()
                 } else {
                     let i_radix = k.create_value(i as Uint);
@@ -332,7 +288,13 @@ impl FheString {
                 next_match = binary_if_then_else(k, matches_i, &next_match_target, &next_match);
 
                 let end = next_match.clone();
-                FheStringSlice { is_start, end }
+                FheOption {
+                    is_some,
+                    val: FheStringSlice {
+                        start: k.create_value(i as Uint),
+                        end,
+                    },
+                }
             })
             .collect::<Vec<_>>();
         elems.reverse();
@@ -340,7 +302,6 @@ impl FheString {
         let mut v = FheStringSliceVector {
             s: self.clone(),
             v: elems,
-            reverse: false,
         };
 
         // If inclusive, remove last element if empty.
@@ -409,7 +370,9 @@ impl FheString {
     ) -> FheStringSliceVector {
         let mut v = self.rsplit(k, p);
         v.truncate(k, n);
-        v.expand_last(k);
+        v.reverse();
+        v.expand_first(k);
+        v.reverse();
         v
     }
 
@@ -468,14 +431,14 @@ impl FheString {
             .par_iter()
             .enumerate()
             .map(|(i, _)| {
-                // is_start = !whitespace[i] && (i == 0 || whitespace[i-1]);
+                // is_some = !whitespace[i] && (i == 0 || whitespace[i-1]);
                 let not_whitespace = binary_not(k, &whitespace[i]);
                 let i_eq_0_or_prev_whitespace = if i == 0 {
                     k.create_one()
                 } else {
                     whitespace[i - 1].clone()
                 };
-                let is_start = binary_and(k, &not_whitespace, &i_eq_0_or_prev_whitespace);
+                let is_some = binary_and(k, &not_whitespace, &i_eq_0_or_prev_whitespace);
 
                 // end = s.index_of_next_white_space_or_max_len(i+1);
                 let index_of_next = next_whitespace.get(i + 1).unwrap_or(&opt_default);
@@ -483,15 +446,17 @@ impl FheString {
                 let end =
                     binary_if_then_else(k, &index_of_next.is_some, &index_of_next.val, &max_len);
 
-                FheStringSlice { is_start, end }
+                FheOption {
+                    is_some,
+                    val: FheStringSlice {
+                        start: k.create_value(i as Uint),
+                        end,
+                    },
+                }
             })
             .collect::<Vec<_>>();
 
-        FheStringSliceVector {
-            s: self.clone(),
-            v,
-            reverse: false,
-        }
+        FheStringSliceVector { s: self.clone(), v }
     }
 
     /// Splits `self` on the first occurrence of the specified delimiter and
@@ -519,24 +484,26 @@ impl FheString {
         let v = (0..max_len + 1)
             .into_par_iter()
             .map(|i| match i {
-                0 => FheStringSlice {
-                    is_start: k.create_one(),
-                    end: found.val.clone(),
+                0 => FheOption {
+                    is_some: k.create_one(),
+                    val: FheStringSlice {
+                        start: k.create_value(i as Uint),
+                        end: found.val.clone(),
+                    },
                 },
-                _ => FheStringSlice {
-                    is_start: k.k.scalar_eq_parallelized(&next, i as Uint),
-                    end: max_len_enc.clone(),
+                _ => FheOption {
+                    is_some: k.k.scalar_eq_parallelized(&next, i as Uint),
+                    val: FheStringSlice {
+                        start: k.create_value(i as Uint),
+                        end: max_len_enc.clone(),
+                    },
                 },
             })
             .collect();
 
         FheOption {
             is_some: found.is_some,
-            val: FheStringSliceVector {
-                s: self.clone(),
-                v,
-                reverse: false,
-            },
+            val: FheStringSliceVector { s: self.clone(), v },
         }
     }
 

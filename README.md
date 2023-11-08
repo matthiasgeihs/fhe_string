@@ -13,23 +13,16 @@ cargo test --release -- --test-threads=1
 
 # single test with log
 RUST_LOG=debug RUST_BACKTRACE=1 cargo test --release "tests::$TEST_NAME" -- --nocapture --exact
+
+# all tests with time measurement (nightly only)
+cargo test --release -- --test-threads=1 -Z unstable-options --report-time
 ```
-
-## Design principles
-
-- Simplicity over performance
 
 ## TODO
 
 - implement cleartext api
 
 - implement example app
-
-- change FheStringSliceVector to include starting positions (instead of assuming
-  one entry per character)?
-
-- hide `FheStringSliceVector.reverse`. object should not leak whether reverse
-  operation has been applied.
 
 - ensure that no constructed `FheStringSliceVector` is longer than
   Key::max_int because otherwise we can't ensure correct indexing
