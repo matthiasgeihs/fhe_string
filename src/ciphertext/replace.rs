@@ -10,7 +10,7 @@ use super::{FheAsciiChar, FheString};
 impl FheString {
     /// Returns `self` where `p` is replaced by `s` up to length `l`.
     pub fn replace(&self, k: &ServerKey, p: &FheString, s: &FheString, l: usize) -> FheString {
-        self.replace_nopt(k, p, s, None, l)
+        self.replace_opt(k, p, s, None, l)
     }
 
     /// Returns `self` where `p` is replaced by `s` up to `n_max` times and the
@@ -23,13 +23,13 @@ impl FheString {
         n_max: &RadixCiphertext,
         l: usize,
     ) -> FheString {
-        self.replace_nopt(k, p, s, Some(n_max), l)
+        self.replace_opt(k, p, s, Some(n_max), l)
     }
 
     /// Returns `self` where `p` is replaced by `s` up to `n_max` times and the
     /// output has maximum length `l`. If `n_max` is None, then there is no
     /// limit on the number of replacements.
-    fn replace_nopt(
+    fn replace_opt(
         &self,
         k: &ServerKey,
         p: &FheString,

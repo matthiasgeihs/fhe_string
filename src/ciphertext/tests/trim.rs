@@ -28,6 +28,10 @@ fn trim_trim_start_trim_end() {
             pad: None,
         },
         TestCase {
+            input: "a ",
+            pad: Some(3),
+        },
+        TestCase {
             input: "",
             pad: None,
         },

@@ -18,11 +18,17 @@ RUST_LOG=debug RUST_BACKTRACE=1 cargo test --release "tests::$TEST_NAME" -- --no
 cargo test --release -- --test-threads=1 -Z unstable-options --report-time
 ```
 
+## Design decisions
+
+- Everything encrypted first.
+
 ## TODO
 
 - implement cleartext api
 
 - implement example app
+
+- implement non-zero terminated strings
 
 - ensure that no constructed `FheStringSliceVector` is longer than
   Key::max_int because otherwise we can't ensure correct indexing
