@@ -1,7 +1,16 @@
-use tfhe::integer::RadixClientKey;
+use tfhe::{
+    core_crypto::prelude::UnsignedNumeric,
+    integer::{block_decomposition::RecomposableFrom, RadixCiphertext, RadixClientKey},
+};
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct ClientKey(pub(crate) RadixClientKey);
+
+impl ClientKey {
+    pub fn decrypt<T: RecomposableFrom<u64> + UnsignedNumeric>(&self, ct: &RadixCiphertext) -> T {
+        self.0.decrypt(ct)
+    }
+}
 
 pub trait Key {
     /// Returns the maximum value that can be stored in a ciphertext.

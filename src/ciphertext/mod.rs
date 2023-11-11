@@ -42,18 +42,20 @@ impl FheString {
     ///
     /// * `s` - The string to be encrypted.
     /// * `k` - The client key.
-    /// * `l` - The length to pad to.
-    pub fn new(k: &ClientKey, s: &str, l: usize) -> Result<Self, Error> {
+    /// * `l` - Optional length to pad to.
+    pub fn new(k: &ClientKey, s: &str, l: Option<usize>) -> Result<Self, Error> {
         if !s.is_ascii() {
             return Err("string is not ascii".into());
         } else if s.chars().find(|&x| x as Uint == Self::TERMINATOR).is_some() {
             return Err("string contains terminator character".into());
         } else if s.len() > Self::max_len_with_key(k) {
             return Err("string length exceeds maximum length".into());
-        } else if l > Self::max_len_with_key(k) {
-            return Err("pad length exceeds maximum length".into());
-        } else if l < s.len() {
-            return Err("string length exceeds pad length".into());
+        } else if let Some(l) = l {
+            if l > Self::max_len_with_key(k) {
+                return Err("pad length exceeds maximum length".into());
+            } else if l < s.len() {
+                return Err("string length exceeds pad length".into());
+            }
         }
 
         // Encrypt characters.
@@ -65,13 +67,15 @@ impl FheString {
             })
             .collect::<Vec<_>>();
 
-        // Append zero char.
-        let zero = k.0.encrypt(0u8);
-        let zero = FheAsciiChar(zero);
-        fhe_chars.push(zero.clone());
+        // Append terminating character.
+        let term = k.0.encrypt(Self::TERMINATOR);
+        let term = FheAsciiChar(term);
+        fhe_chars.push(term.clone());
 
-        // Pad to length.
-        (0..l + 1 - fhe_chars.len()).for_each(|_| fhe_chars.push(zero.clone()));
+        // Optional: Pad to length.
+        if let Some(l) = l {
+            (0..l + 1 - fhe_chars.len()).for_each(|_| fhe_chars.push(term.clone()));
+        }
 
         Ok(FheString(fhe_chars))
     }

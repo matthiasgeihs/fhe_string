@@ -18,7 +18,6 @@ fn setup() -> (ClientKey, ServerKey) {
 }
 
 fn encrypt_string(k: &ClientKey, s: &str, l: Option<usize>) -> FheString {
-    let l = l.unwrap_or(s.len());
     FheString::new(k, s, l).unwrap()
 }
 

@@ -24,18 +24,14 @@ cargo test --release -- --test-threads=1 -Z unstable-options --report-time
 
 ## TODO
 
-- implement cleartext api
-
 - implement example app
+
+- implement cleartext api
 
 - implement non-zero terminated strings
 
 - ensure that no constructed `FheStringSliceVector` is longer than
   Key::max_int because otherwise we can't ensure correct indexing
-
-- check usage of `unchecked_sum_ciphertexts_vec_parallelized` and
-  `unchecked_sum_ciphertexts_slice_parallelized`: usage requires no carries. see
-  function documentation for more details.
 
 - `split`: Support for empty pattern
 ```
