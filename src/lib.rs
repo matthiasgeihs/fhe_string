@@ -7,7 +7,8 @@ pub mod client_key;
 pub mod error;
 pub mod server_key;
 
-/// Generates a fresh key pair.
+/// Generates a fresh key pair for handling encrypted strings up to length
+/// `2^8-1`.
 pub fn generate_keys(params: ClassicPBSParameters) -> (ClientKey, ServerKey) {
     let ascii_bitlen = 8;
     let msg_mod = params.message_modulus.0;
