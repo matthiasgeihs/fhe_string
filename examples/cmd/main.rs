@@ -51,6 +51,7 @@ fn main() {
     // Run operations on encrypted string.
 
     let test_cases: Vec<TestCase> = vec![
+        // search
         TestCase {
             name: |input, pattern| format!("\"{input}\".contains(\"{pattern}\")"),
             std: |input, pattern| Box::new(input.contains(pattern)),
@@ -81,6 +82,55 @@ fn main() {
             fhe: |input, pattern, sk, ck| {
                 let r = input.find(sk, pattern);
                 Box::new(decrypt_option_int(ck, &r))
+            },
+        },
+        TestCase {
+            name: |input, pattern| format!("\"{input}\".rfind(\"{pattern}\")"),
+            std: |input, pattern| Box::new(input.rfind(pattern)),
+            fhe: |input, pattern, sk, ck| {
+                let r = input.rfind(sk, pattern);
+                Box::new(decrypt_option_int(ck, &r))
+            },
+        },
+        // compare
+        TestCase {
+            name: |input, pattern| format!("\"{input}\".eq(\"{pattern}\")"),
+            std: |input, pattern| Box::new(input.eq(pattern)),
+            fhe: |input, pattern, sk, ck| {
+                let r = input.eq(sk, pattern);
+                Box::new(decrypt_bool(ck, &r))
+            },
+        },
+        TestCase {
+            name: |input, pattern| format!("\"{input}\".le(\"{pattern}\")"),
+            std: |input, pattern| Box::new(input.le(pattern)),
+            fhe: |input, pattern, sk, ck| {
+                let r = input.le(sk, pattern);
+                Box::new(decrypt_bool(ck, &r))
+            },
+        },
+        TestCase {
+            name: |input, pattern| format!("\"{input}\".ge(\"{pattern}\")"),
+            std: |input, pattern| Box::new(input.ge(pattern)),
+            fhe: |input, pattern, sk, ck| {
+                let r = input.ge(sk, pattern);
+                Box::new(decrypt_bool(ck, &r))
+            },
+        },
+        TestCase {
+            name: |input, pattern| format!("\"{input}\".ne(\"{pattern}\")"),
+            std: |input, pattern| Box::new(input.ne(pattern)),
+            fhe: |input, pattern, sk, ck| {
+                let r = input.ne(sk, pattern);
+                Box::new(decrypt_bool(ck, &r))
+            },
+        },
+        TestCase {
+            name: |input, pattern| format!("\"{input}\".eq_ignore_ascii_case(\"{pattern}\")"),
+            std: |input, pattern| Box::new(input.eq_ignore_ascii_case(pattern)),
+            fhe: |input, pattern, sk, ck| {
+                let r = input.eq_ignore_ascii_case(sk, pattern);
+                Box::new(decrypt_bool(ck, &r))
             },
         },
     ];

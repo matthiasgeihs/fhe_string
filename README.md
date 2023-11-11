@@ -44,3 +44,11 @@ TestCase {
 std = "["", "x", "x", "x", ""]"
 fhe = "["", "", ""]"
 ```
+
+## Notes
+
+Functions that can be sped up when it is known whether padding is used:
+- `ends_with`: currently need to go through whole string because we don't know
+  length. then only need to compare the respective ends of the two encrypted
+  strings.
+
