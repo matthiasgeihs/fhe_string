@@ -1,7 +1,4 @@
-use std::{
-    fmt::{Debug, Display},
-    time::Instant,
-};
+use std::{any::Any, fmt::Debug, time::Instant};
 
 use clap::Parser;
 use fhe_string::{
@@ -53,53 +50,53 @@ fn main() {
 
     // Run operations on encrypted string.
 
-    let test_cases: Vec<Box<dyn TestCase<_>>> = vec![
-        Box::new(BoolTestCase {
+    let test_cases: Vec<TestCase> = vec![
+        TestCase {
             name: |input, pattern| format!("\"{input}\".contains(\"{pattern}\")"),
-            std: |input, pattern| input.contains(pattern),
+            std: |input, pattern| Box::new(input.contains(pattern)),
             fhe: |input, pattern, sk, ck| {
                 let r = input.contains(sk, pattern);
-                decrypt_bool(ck, &r)
+                Box::new(decrypt_bool(ck, &r))
             },
-        }),
-        // TestCase {
-        //     name: |input, pattern| format!("\"{input}\".starts_with(\"{pattern}\")"),
-        //     std: |input, pattern| input.starts_with(pattern),
-        //     fhe: |input, pattern, sk, ck| {
-        //         let r = input.starts_with(sk, pattern);
-        //         decrypt_bool(ck, &r)
-        //     },
-        // },
-        // TestCase {
-        //     name: |input, pattern| format!("\"{input}\".ends_with(\"{pattern}\")"),
-        //     std: |input, pattern| input.ends_with(pattern),
-        //     fhe: |input, pattern, sk, ck| {
-        //         let r = input.ends_with(sk, pattern);
-        //         decrypt_bool(ck, &r)
-        //     },
-        // },
-        Box::new(UsizeOptionTestCase {
+        },
+        TestCase {
+            name: |input, pattern| format!("\"{input}\".starts_with(\"{pattern}\")"),
+            std: |input, pattern| Box::new(input.starts_with(pattern)),
+            fhe: |input, pattern, sk, ck| {
+                let r = input.starts_with(sk, pattern);
+                Box::new(decrypt_bool(ck, &r))
+            },
+        },
+        TestCase {
+            name: |input, pattern| format!("\"{input}\".ends_with(\"{pattern}\")"),
+            std: |input, pattern| Box::new(input.ends_with(pattern)),
+            fhe: |input, pattern, sk, ck| {
+                let r = input.ends_with(sk, pattern);
+                Box::new(decrypt_bool(ck, &r))
+            },
+        },
+        TestCase {
             name: |input, pattern| format!("\"{input}\".find(\"{pattern}\")"),
-            std: |input, pattern| input.find(pattern),
+            std: |input, pattern| Box::new(input.find(pattern)),
             fhe: |input, pattern, sk, ck| {
                 let r = input.find(sk, pattern);
-                decrypt_option_int(ck, &r)
+                Box::new(decrypt_option_int(ck, &r))
             },
-        }),
+        },
     ];
 
     test_cases.iter().for_each(|t| {
         let start = Instant::now();
-        let result_std = t.std(&input, &pattern);
+        let result_std = (t.std)(&input, &pattern);
         let duration_std = start.elapsed();
 
         let start = Instant::now();
-        let result_fhe = t.fhe(&input_enc, &pattern_enc, &sk, &ck);
+        let result_fhe = (t.fhe)(&input_enc, &pattern_enc, &sk, &ck);
         let duration_fhe = start.elapsed();
 
-        println!("\n{}", t.name(&input, &pattern));
-        println!("Std: {result_std} ({:?})", duration_std);
-        println!("Fhe: {result_fhe} ({:?})", duration_fhe);
+        println!("\n{}", (t.name)(&input, &pattern));
+        println!("Std: {:?} ({:?})", result_std, duration_std);
+        println!("Fhe: {:?} ({:?})", result_fhe, duration_fhe);
         println!(
             "Equal: {}",
             if result_std == result_fhe {
@@ -111,80 +108,41 @@ fn main() {
     });
 }
 
-trait TestCase<T: Eq + Debug> {
-    fn name(&self, input: &str, pattern: &str) -> String;
-    fn std(&self, input: &str, pattern: &str) -> T;
-    fn fhe(
-        &self,
-        input: &FheString,
-        pattern: &FheString,
-        server_key: &ServerKey,
-        client_key: &ClientKey,
-    ) -> T;
+trait TestCaseOutput: Debug {
+    fn as_any(&self) -> &dyn Any;
+    fn eq(&self, _: &dyn TestCaseOutput) -> bool;
 }
 
-struct BoolTestCase {
+impl<S: 'static + PartialEq + Debug> TestCaseOutput for S {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn eq(&self, other: &dyn TestCaseOutput) -> bool {
+        // Do a type-safe casting. If the types are different,
+        // return false, otherwise test the values for equality.
+        other
+            .as_any()
+            .downcast_ref::<S>()
+            .map_or(false, |a| self == a)
+    }
+}
+
+impl PartialEq for dyn TestCaseOutput {
+    fn eq(&self, other: &Self) -> bool {
+        self.eq(other)
+    }
+}
+
+struct TestCase {
     name: fn(input: &str, pattern: &str) -> String,
-    std: fn(input: &str, pattern: &str) -> bool,
+    std: fn(input: &str, pattern: &str) -> Box<dyn TestCaseOutput>,
     fhe: fn(
         input: &FheString,
         pattern: &FheString,
         server_key: &ServerKey,
         client_key: &ClientKey,
-    ) -> bool,
-}
-
-impl TestCase<bool> for BoolTestCase {
-    fn name(&self, input: &str, pattern: &str) -> String {
-        (self.name)(input, pattern)
-    }
-
-    fn std(&self, input: &str, pattern: &str) -> bool {
-        (self.std)(input, pattern)
-    }
-
-    fn fhe(
-        &self,
-        input: &FheString,
-        pattern: &FheString,
-        server_key: &ServerKey,
-        client_key: &ClientKey,
-    ) -> bool {
-        let r = input.contains(server_key, pattern);
-        decrypt_bool(client_key, &r)
-    }
-}
-
-struct UsizeOptionTestCase {
-    name: fn(input: &str, pattern: &str) -> String,
-    std: fn(input: &str, pattern: &str) -> usize,
-    fhe: fn(
-        input: &FheString,
-        pattern: &FheString,
-        server_key: &ServerKey,
-        client_key: &ClientKey,
-    ) -> usize,
-}
-
-impl TestCase<Option<usize>> for UsizeOptionTestCase {
-    fn name(&self, input: &str, pattern: &str) -> String {
-        (self.name)(input, pattern)
-    }
-
-    fn std(&self, input: &str, pattern: &str) -> bool {
-        (self.std)(input, pattern)
-    }
-
-    fn fhe(
-        &self,
-        input: &FheString,
-        pattern: &FheString,
-        server_key: &ServerKey,
-        client_key: &ClientKey,
-    ) -> bool {
-        let r = input.contains(server_key, pattern);
-        decrypt_bool(client_key, &r)
-    }
+    ) -> Box<dyn TestCaseOutput>,
 }
 
 fn decrypt_bool(k: &ClientKey, b: &RadixCiphertext) -> bool {
