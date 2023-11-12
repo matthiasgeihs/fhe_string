@@ -21,10 +21,18 @@ struct Args {
     #[arg(long)]
     pattern: String,
 
+    /// Pattern to be used for operations on encrypted input string.
+    #[arg(long, default_value = "_")]
+    substitution: String,
+
     /// Length encrypted strings are padded to. If `None`, no additional padding
     /// is applied.
     #[arg(long)]
-    padlength: Option<usize>,
+    pad: Option<usize>,
+
+    /// Value used for parameter `n`.
+    #[arg(long, default_value_t = 3)]
+    n: usize,
 }
 
 fn main() {
@@ -35,141 +43,275 @@ fn main() {
     let args = Args::parse();
     let input = args.input;
     let pattern = args.pattern;
+    let substitution = args.substitution;
+    let n = args.n;
 
     println!("Generating keys...");
-    let (ck, sk) = generate_keys(PARAM_MESSAGE_2_CARRY_2_KS_PBS);
+    let (client_key, server_key) = generate_keys(PARAM_MESSAGE_2_CARRY_2_KS_PBS);
     println!("Done.");
 
     println!("Encrypting input...");
-    let input_enc = FheString::new(&ck, &input, args.padlength).unwrap();
+    let input_enc = FheString::new(&client_key, &input, args.pad).unwrap();
     println!("Done.");
 
     println!("Encrypting pattern...");
-    let pattern_enc = FheString::new(&ck, &pattern, args.padlength).unwrap();
+    let pattern_enc = FheString::new(&client_key, &pattern, args.pad).unwrap();
     println!("Done.");
+
+    println!("Encrypting substitution...");
+    let substitution_enc = FheString::new(&client_key, &substitution, args.pad).unwrap();
+    println!("Done.");
+
+    println!("Encrypting n...");
+    let n_enc = client_key.encrypt(n as u64);
+    println!("Done.");
+
+    let args = TestCaseInput {
+        client_key,
+        server_key,
+        input: input,
+        input_enc,
+        n,
+        n_enc,
+        pattern,
+        pattern_enc,
+        substitution,
+        substitution_enc,
+    };
 
     // Run operations on encrypted string.
 
     let test_cases: Vec<TestCase> = vec![
         // search
         TestCase {
-            name: |input, pattern| format!("\"{input}\".contains(\"{pattern}\")"),
-            std: |input, pattern| Box::new(input.contains(pattern)),
-            fhe: |input, pattern, sk, ck| {
-                let r = input.contains(sk, pattern);
-                Box::new(decrypt_bool(ck, &r))
+            name: |args| format!("\"{}\".contains(\"{}\")", args.input, args.pattern),
+            std: |args| Box::new(args.input.contains(&args.pattern)),
+            fhe: |args| {
+                let r = args.input_enc.contains(&args.server_key, &args.pattern_enc);
+                Box::new(decrypt_bool(&args.client_key, &r))
             },
         },
         TestCase {
-            name: |input, pattern| format!("\"{input}\".starts_with(\"{pattern}\")"),
-            std: |input, pattern| Box::new(input.starts_with(pattern)),
-            fhe: |input, pattern, sk, ck| {
-                let r = input.starts_with(sk, pattern);
-                Box::new(decrypt_bool(ck, &r))
+            name: |args| format!("\"{}\".starts_with(\"{}\")", args.input, args.pattern),
+            std: |args| Box::new(args.input.starts_with(&args.pattern)),
+            fhe: |args| {
+                let r = args
+                    .input_enc
+                    .starts_with(&args.server_key, &args.pattern_enc);
+                Box::new(decrypt_bool(&args.client_key, &r))
             },
         },
         TestCase {
-            name: |input, pattern| format!("\"{input}\".ends_with(\"{pattern}\")"),
-            std: |input, pattern| Box::new(input.ends_with(pattern)),
-            fhe: |input, pattern, sk, ck| {
-                let r = input.ends_with(sk, pattern);
-                Box::new(decrypt_bool(ck, &r))
+            name: |args| format!("\"{}\".ends_with(\"{}\")", args.input, args.pattern),
+            std: |args| Box::new(args.input.ends_with(&args.pattern)),
+            fhe: |args| {
+                let r = args
+                    .input_enc
+                    .ends_with(&args.server_key, &args.pattern_enc);
+                Box::new(decrypt_bool(&args.client_key, &r))
             },
         },
         TestCase {
-            name: |input, pattern| format!("\"{input}\".find(\"{pattern}\")"),
-            std: |input, pattern| Box::new(input.find(pattern)),
-            fhe: |input, pattern, sk, ck| {
-                let r = input.find(sk, pattern);
-                Box::new(decrypt_option_int(ck, &r))
+            name: |args| format!("\"{}\".find(\"{}\")", args.input, args.pattern),
+            std: |args| Box::new(args.input.find(&args.pattern)),
+            fhe: |args| {
+                let r = args.input_enc.find(&args.server_key, &args.pattern_enc);
+                Box::new(decrypt_option_int(&args.client_key, &r))
             },
         },
         TestCase {
-            name: |input, pattern| format!("\"{input}\".rfind(\"{pattern}\")"),
-            std: |input, pattern| Box::new(input.rfind(pattern)),
-            fhe: |input, pattern, sk, ck| {
-                let r = input.rfind(sk, pattern);
-                Box::new(decrypt_option_int(ck, &r))
+            name: |args| format!("\"{}\".rfind(\"{}\")", args.input, args.pattern),
+            std: |args| Box::new(args.input.rfind(&args.pattern)),
+            fhe: |args| {
+                let r = args.input_enc.rfind(&args.server_key, &args.pattern_enc);
+                Box::new(decrypt_option_int(&args.client_key, &r))
             },
         },
         // compare
         TestCase {
-            name: |input, pattern| format!("\"{input}\".eq(\"{pattern}\")"),
-            std: |input, pattern| Box::new(input.eq(pattern)),
-            fhe: |input, pattern, sk, ck| {
-                let r = input.eq(sk, pattern);
-                Box::new(decrypt_bool(ck, &r))
+            name: |args| format!("\"{}\".eq(\"{}\")", args.input, args.pattern),
+            std: |args| Box::new(PartialEq::eq(&args.input, &args.pattern)),
+            fhe: |args| {
+                let r = args.input_enc.eq(&args.server_key, &args.pattern_enc);
+                Box::new(decrypt_bool(&args.client_key, &r))
             },
         },
         TestCase {
-            name: |input, pattern| format!("\"{input}\".le(\"{pattern}\")"),
-            std: |input, pattern| Box::new(input.le(pattern)),
-            fhe: |input, pattern, sk, ck| {
-                let r = input.le(sk, pattern);
-                Box::new(decrypt_bool(ck, &r))
+            name: |args| format!("\"{}\".le(\"{}\")", args.input, args.pattern),
+            std: |args| Box::new(args.input.le(&args.pattern)),
+            fhe: |args| {
+                let r = args.input_enc.le(&args.server_key, &args.pattern_enc);
+                Box::new(decrypt_bool(&args.client_key, &r))
             },
         },
         TestCase {
-            name: |input, pattern| format!("\"{input}\".ge(\"{pattern}\")"),
-            std: |input, pattern| Box::new(input.ge(pattern)),
-            fhe: |input, pattern, sk, ck| {
-                let r = input.ge(sk, pattern);
-                Box::new(decrypt_bool(ck, &r))
+            name: |args| format!("\"{}\".ge(\"{}\")", args.input, args.pattern),
+            std: |args| Box::new(args.input.ge(&args.pattern)),
+            fhe: |args| {
+                let r = args.input_enc.ge(&args.server_key, &args.pattern_enc);
+                Box::new(decrypt_bool(&args.client_key, &r))
             },
         },
         TestCase {
-            name: |input, pattern| format!("\"{input}\".ne(\"{pattern}\")"),
-            std: |input, pattern| Box::new(input.ne(pattern)),
-            fhe: |input, pattern, sk, ck| {
-                let r = input.ne(sk, pattern);
-                Box::new(decrypt_bool(ck, &r))
+            name: |args| format!("\"{}\".ne(\"{}\")", args.input, args.pattern),
+            std: |args| Box::new(args.input.ne(&args.pattern)),
+            fhe: |args| {
+                let r = args.input_enc.ne(&args.server_key, &args.pattern_enc);
+                Box::new(decrypt_bool(&args.client_key, &r))
             },
         },
         TestCase {
-            name: |input, pattern| format!("\"{input}\".eq_ignore_ascii_case(\"{pattern}\")"),
-            std: |input, pattern| Box::new(input.eq_ignore_ascii_case(pattern)),
-            fhe: |input, pattern, sk, ck| {
-                let r = input.eq_ignore_ascii_case(sk, pattern);
-                Box::new(decrypt_bool(ck, &r))
+            name: |args| {
+                format!(
+                    "\"{}\".eq_ignore_ascii_case(\"{}\")",
+                    args.input, args.pattern
+                )
+            },
+            std: |args| Box::new(args.input.eq_ignore_ascii_case(&args.pattern)),
+            fhe: |args| {
+                let r = args
+                    .input_enc
+                    .eq_ignore_ascii_case(&args.server_key, &args.pattern_enc);
+                Box::new(decrypt_bool(&args.client_key, &r))
             },
         },
         TestCase {
-            name: |input, _pattern| format!("\"{input}\".is_empty()"),
-            std: |input, _pattern| Box::new(input.is_empty()),
-            fhe: |input, _pattern, sk, ck| {
-                let r = input.is_empty(sk);
-                Box::new(decrypt_bool(ck, &r))
+            name: |args| format!("\"{}\".is_empty()", args.input,),
+            std: |args| Box::new(args.input.is_empty()),
+            fhe: |args| {
+                let r = args.input_enc.is_empty(&args.server_key);
+                Box::new(decrypt_bool(&args.client_key, &r))
             },
         },
         // insert
         TestCase {
-            name: |input, pattern| format!("\"{input}\".add(\"{pattern}\")"),
-            std: |input, pattern| Box::new(input.to_owned().add(pattern)),
-            fhe: |input, pattern, sk, ck| {
-                let r = input.add(sk, pattern);
-                Box::new(r.decrypt(&ck))
+            name: |args| format!("\"{}\".add(\"{}\")", args.input, args.pattern),
+            std: |args| Box::new(args.input.clone().add(&args.pattern)),
+            fhe: |args| {
+                let r = args.input_enc.add(&args.server_key, &args.pattern_enc);
+                Box::new(r.decrypt(&args.client_key))
             },
         },
         TestCase {
-            name: |input, pattern| format!("\"{input}\".repeat(\"{n}\")"),
-            std: |input, pattern| Box::new(input.repeat(n)),
-            fhe: |input, pattern, sk, ck| {
-                let r = input.repeat(sk, n, l);
-                Box::new(r.decrypt(&ck))
+            name: |args| format!("\"{}\".repeat({})", args.input, args.n),
+            std: |args| Box::new(args.input.repeat(args.n)),
+            fhe: |args| {
+                let l = args.input.repeat(args.n).len();
+                check_len(&args.server_key, l);
+                let r = args.input_enc.repeat(&args.server_key, &args.n_enc, l);
+                Box::new(r.decrypt(&args.client_key))
             },
         },
+        // replace
+        TestCase {
+            name: |args| {
+                format!(
+                    "\"{}\".replace(\"{}\", \"{}\")",
+                    args.input, args.pattern, args.substitution
+                )
+            },
+            std: |args| Box::new(args.input.replace(&args.pattern, &args.substitution)),
+            fhe: |args| {
+                let l = args.input.replace(&args.pattern, &args.substitution).len();
+                check_len(&args.server_key, l);
+                let r = args.input_enc.replace(
+                    &args.server_key,
+                    &args.pattern_enc,
+                    &args.substitution_enc,
+                    l,
+                );
+                Box::new(r.decrypt(&args.client_key))
+            },
+        },
+        TestCase {
+            name: |args| {
+                format!(
+                    "\"{}\".replacen(\"{}\", \"{}\", {})",
+                    args.input, args.pattern, args.substitution, args.n
+                )
+            },
+            std: |args| {
+                Box::new(
+                    args.input
+                        .replacen(&args.pattern, &args.substitution, args.n),
+                )
+            },
+            fhe: |args| {
+                let l = args
+                    .input
+                    .replacen(&args.pattern, &args.substitution, args.n)
+                    .len();
+                check_len(&args.server_key, l);
+                let r = args.input_enc.replacen(
+                    &args.server_key,
+                    &args.pattern_enc,
+                    &args.substitution_enc,
+                    &args.n_enc,
+                    l,
+                );
+                Box::new(r.decrypt(&args.client_key))
+            },
+        },
+        // split
+        TestCase {
+            name: |args| format!("\"{}\".split(\"{}\")", args.input, args.pattern),
+            std: |args| {
+                Box::new(
+                    args.input
+                        .split(&args.pattern)
+                        .map(|s| s.to_string())
+                        .collect::<Vec<String>>(),
+                )
+            },
+            fhe: |args| {
+                let r = args.input_enc.split(&args.server_key, &args.pattern_enc);
+                Box::new(r.decrypt(&args.client_key))
+            },
+        },
+        TestCase {
+            name: |args| format!("\"{}\".rsplit(\"{}\")", args.input, args.pattern),
+            std: |args| {
+                Box::new(
+                    args.input
+                        .rsplit(&args.pattern)
+                        .map(|s| s.to_string())
+                        .collect::<Vec<String>>(),
+                )
+            },
+            fhe: |args| {
+                let r = args.input_enc.rsplit(&args.server_key, &args.pattern_enc);
+                Box::new(r.decrypt(&args.client_key))
+            },
+        },
+        // TestCase {
+        //     name: |args| format!("\"{}\".split_once(\"{}\")", args.input, args.pattern),
+        //     std: |args| {
+        //         Box::new(
+        //             args.input
+        //                 .split_once(&args.pattern)
+        //                 .map(|s| s.to_string())
+        //                 .collect::<Vec<String>>(),
+        //         )
+        //     },
+        //     fhe: |args| {
+        //         let r = args
+        //             .input_enc
+        //             .split_once(&args.server_key, &args.pattern_enc);
+        //         Box::new(r.decrypt(&args.client_key))
+        //     },
+        // },
     ];
 
     test_cases.iter().for_each(|t| {
         let start = Instant::now();
-        let result_std = (t.std)(&input, &pattern);
+        let result_std = (t.std)(&args);
         let duration_std = start.elapsed();
 
         let start = Instant::now();
-        let result_fhe = (t.fhe)(&input_enc, &pattern_enc, &sk, &ck);
+        let result_fhe = (t.fhe)(&args);
         let duration_fhe = start.elapsed();
 
-        println!("\n{}", (t.name)(&input, &pattern));
+        println!("\n{}", (t.name)(&args));
         println!("Std: {:?} ({:?})", result_std, duration_std);
         println!("Fhe: {:?} ({:?})", result_fhe, duration_fhe);
         println!(
@@ -209,15 +351,23 @@ impl PartialEq for dyn TestCaseOutput {
     }
 }
 
+struct TestCaseInput {
+    input: String,
+    pattern: String,
+    substitution: String,
+    n: usize,
+    input_enc: FheString,
+    pattern_enc: FheString,
+    substitution_enc: FheString,
+    n_enc: RadixCiphertext,
+    server_key: ServerKey,
+    client_key: ClientKey,
+}
+
 struct TestCase {
-    name: fn(input: &str, pattern: &str) -> String,
-    std: fn(input: &str, pattern: &str) -> Box<dyn TestCaseOutput>,
-    fhe: fn(
-        input: &FheString,
-        pattern: &FheString,
-        server_key: &ServerKey,
-        client_key: &ClientKey,
-    ) -> Box<dyn TestCaseOutput>,
+    name: fn(input: &TestCaseInput) -> String,
+    std: fn(input: &TestCaseInput) -> Box<dyn TestCaseOutput>,
+    fhe: fn(input: &TestCaseInput) -> Box<dyn TestCaseOutput>,
 }
 
 fn decrypt_bool(k: &ClientKey, b: &RadixCiphertext) -> bool {
@@ -242,5 +392,12 @@ fn int_to_bool(x: u64) -> bool {
         0 => false,
         1 => true,
         _ => panic!("expected 0 or 1, got {}", x),
+    }
+}
+
+fn check_len(k: &ServerKey, l: usize) {
+    let max_len = FheString::max_len_with_key(k);
+    if l > max_len {
+        println!("Warning: Length of cleartext result ({l}) exceeds maximum length of encrypted string ({max_len})");
     }
 }

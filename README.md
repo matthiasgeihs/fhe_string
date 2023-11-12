@@ -26,6 +26,8 @@ cargo test --release -- --test-threads=1 -Z unstable-options --report-time
 
 - implement example app
 
+- improve speed of `repeat`
+
 - implement cleartext api
 
 - implement non-zero terminated strings
@@ -51,4 +53,6 @@ Functions that can be sped up when it is known whether padding is used:
 - `ends_with`: currently need to go through whole string because we don't know
   length. then only need to compare the respective ends of the two encrypted
   strings.
+- `add`, `repeat`: currently this is a quadratic operation because we don't know
+  where the boundaries are. if we know the length, we can just append.
 
