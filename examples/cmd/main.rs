@@ -1,4 +1,4 @@
-use std::{any::Any, fmt::Debug, time::Instant};
+use std::{any::Any, fmt::Debug, ops::Add, time::Instant};
 
 use clap::Parser;
 use fhe_string::{
@@ -131,6 +131,23 @@ fn main() {
             fhe: |input, pattern, sk, ck| {
                 let r = input.eq_ignore_ascii_case(sk, pattern);
                 Box::new(decrypt_bool(ck, &r))
+            },
+        },
+        TestCase {
+            name: |input, _pattern| format!("\"{input}\".is_empty()"),
+            std: |input, _pattern| Box::new(input.is_empty()),
+            fhe: |input, _pattern, sk, ck| {
+                let r = input.is_empty(sk);
+                Box::new(decrypt_bool(ck, &r))
+            },
+        },
+        // insert
+        TestCase {
+            name: |input, pattern| format!("\"{input}\".add(\"{pattern}\")"),
+            std: |input, pattern| Box::new(input.to_owned().add(pattern)),
+            fhe: |input, pattern, sk, ck| {
+                let r = input.add(sk, pattern);
+                Box::new(r.decrypt(&ck))
             },
         },
     ];
