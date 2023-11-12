@@ -150,6 +150,14 @@ fn main() {
                 Box::new(r.decrypt(&ck))
             },
         },
+        TestCase {
+            name: |input, pattern| format!("\"{input}\".repeat(\"{n}\")"),
+            std: |input, pattern| Box::new(input.repeat(n)),
+            fhe: |input, pattern, sk, ck| {
+                let r = input.repeat(sk, n, l);
+                Box::new(r.decrypt(&ck))
+            },
+        },
     ];
 
     test_cases.iter().for_each(|t| {
