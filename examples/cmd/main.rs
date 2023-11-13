@@ -359,6 +359,72 @@ fn main() {
                 Box::new(r.decrypt(&args.client_key))
             },
         },
+        TestCase {
+            name: |args| format!("\"{}\".split_terminator(\"{}\")", args.input, args.pattern),
+            std: |args| {
+                Box::new(
+                    args.input
+                        .split_terminator(&args.pattern)
+                        .map(|s| s.to_string())
+                        .collect::<Vec<String>>(),
+                )
+            },
+            fhe: |args| {
+                let r = args
+                    .input_enc
+                    .split_terminator(&args.server_key, &args.pattern_enc);
+                Box::new(r.decrypt(&args.client_key))
+            },
+        },
+        TestCase {
+            name: |args| format!("\"{}\".rsplit_terminator(\"{}\")", args.input, args.pattern),
+            std: |args| {
+                Box::new(
+                    args.input
+                        .rsplit_terminator(&args.pattern)
+                        .map(|s| s.to_string())
+                        .collect::<Vec<String>>(),
+                )
+            },
+            fhe: |args| {
+                let r = args
+                    .input_enc
+                    .rsplit_terminator(&args.server_key, &args.pattern_enc);
+                Box::new(r.decrypt(&args.client_key))
+            },
+        },
+        TestCase {
+            name: |args| format!("\"{}\".split_inclusive(\"{}\")", args.input, args.pattern),
+            std: |args| {
+                Box::new(
+                    args.input
+                        .split_inclusive(&args.pattern)
+                        .map(|s| s.to_string())
+                        .collect::<Vec<String>>(),
+                )
+            },
+            fhe: |args| {
+                let r = args
+                    .input_enc
+                    .split_inclusive(&args.server_key, &args.pattern_enc);
+                Box::new(r.decrypt(&args.client_key))
+            },
+        },
+        TestCase {
+            name: |args| format!("\"{}\".split_ascii_whitespace()", args.input),
+            std: |args| {
+                Box::new(
+                    args.input
+                        .split_ascii_whitespace()
+                        .map(|s| s.to_string())
+                        .collect::<Vec<String>>(),
+                )
+            },
+            fhe: |args| {
+                let r = args.input_enc.split_ascii_whitespace(&args.server_key);
+                Box::new(r.decrypt(&args.client_key))
+            },
+        },
     ];
 
     test_cases.iter().for_each(|t| {
