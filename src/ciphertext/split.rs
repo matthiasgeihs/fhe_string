@@ -467,55 +467,35 @@ impl FheString {
         k: &ServerKey,
         p: &FheString,
         reverse: bool,
-    ) -> FheOption<FheStringSliceVector> {
+    ) -> FheOption<(FheString, FheString)> {
         let found = if reverse {
             self.rfind(k, p)
         } else {
             self.find(k, p)
         };
-        let max_len = self.max_len();
-        let max_len_enc = k.create_value(max_len as Uint);
         let p_len = p.len(k);
-
-        // next = found.val + p_len
         let next = k.k.add_parallelized(&found.val, &p_len);
 
-        // v[i] = i == 0 ? (1, found.val) : (i == next ? 1 : 0, max_len)
-        let v = (0..max_len + 1)
-            .into_par_iter()
-            .map(|i| match i {
-                0 => FheOption {
-                    is_some: k.create_one(),
-                    val: FheStringSlice {
-                        start: k.create_value(i as Uint),
-                        end: found.val.clone(),
-                    },
-                },
-                _ => FheOption {
-                    is_some: k.k.scalar_eq_parallelized(&next, i as Uint),
-                    val: FheStringSlice {
-                        start: k.create_value(i as Uint),
-                        end: max_len_enc.clone(),
-                    },
-                },
-            })
-            .collect();
+        // s1 = s[..found.val]
+        // s1 = s[found.val+p.len..]
+        let s1 = self.substr_to(k, &found.val);
+        let s2 = self.substr_from(k, &next);
 
         FheOption {
             is_some: found.is_some,
-            val: FheStringSliceVector { s: self.clone(), v },
+            val: (s1, s2),
         }
     }
 
     /// Splits `self` on the first occurrence of the specified delimiter and
     /// returns prefix before delimiter and suffix after delimiter.
-    pub fn split_once(&self, k: &ServerKey, p: &FheString) -> FheOption<FheStringSliceVector> {
+    pub fn split_once(&self, k: &ServerKey, p: &FheString) -> FheOption<(FheString, FheString)> {
         self.split_once_opt(k, p, false)
     }
 
     /// Splits `self` on the last occurrence of the specified delimiter and
     /// returns prefix before delimiter and suffix after delimiter.
-    pub fn rsplit_once(&self, k: &ServerKey, p: &FheString) -> FheOption<FheStringSliceVector> {
+    pub fn rsplit_once(&self, k: &ServerKey, p: &FheString) -> FheOption<(FheString, FheString)> {
         self.split_once_opt(k, p, true)
     }
 }

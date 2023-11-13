@@ -33,7 +33,7 @@ impl FheString {
         });
 
         let i = binary_if_then_else(k, &i_opt.is_some, &i_opt.val, &k.create_zero());
-        self.substr(k, &i)
+        self.substr_from(k, &i)
     }
 
     /// Returns `self[..i+1]` where `i` is the index of the last non-whitespace
@@ -79,7 +79,7 @@ impl FheString {
 
         // Truncate start.
         let i = binary_if_then_else(k, &index_start.is_some, &index_start.val, &k.create_zero());
-        s.substr(k, &i)
+        s.substr_from(k, &i)
     }
 
     /// Returns a copy of `self` where the start of `self` is stripped if it is
@@ -87,7 +87,7 @@ impl FheString {
     pub fn strip_prefix(&self, k: &ServerKey, s: &FheString) -> FheOption<FheString> {
         let b = self.substr_eq(k, 0, s);
         let index = s.len(k);
-        let stripped = self.substr(k, &index);
+        let stripped = self.substr_from(k, &index);
         FheOption {
             is_some: b,
             val: stripped,

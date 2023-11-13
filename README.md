@@ -18,6 +18,12 @@ RUST_LOG=debug RUST_BACKTRACE=1 cargo test --release "tests::$TEST_NAME" -- --no
 cargo test --release -- --test-threads=1 -Z unstable-options --report-time
 ```
 
+## Example `cmd`
+
+```bash
+cargo run --example cmd --release -- --input abc --pattern bc
+```
+
 ## Design decisions
 
 - Everything encrypted first.

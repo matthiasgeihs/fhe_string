@@ -421,18 +421,18 @@ fn split_once() {
         let input_enc = encrypt_string(&client_key, t.input, t.pad);
         let pattern_enc = encrypt_string(&client_key, t.pattern, t.pad);
 
-        let opt_v = t.input.split_once(t.pattern);
-        let opt_v = match opt_v {
-            Some(v) => Some(vec![v.0.to_string(), v.1.to_string()]),
-            None => None,
-        };
+        let opt_v = t
+            .input
+            .split_once(t.pattern)
+            .map(|v| (v.0.to_string(), v.1.to_string()));
 
         let opt_v_enc = input_enc.split_once(&server_key, &pattern_enc);
         let b_dec = client_key.0.decrypt::<u64>(&opt_v_enc.is_some);
-        let v_dec = opt_v_enc.val.decrypt(&client_key);
+        let val0_dec = opt_v_enc.val.0.decrypt(&client_key);
+        let val1_dec = opt_v_enc.val.1.decrypt(&client_key);
         let opt_v_dec = match b_dec {
             0 => None,
-            _ => Some(v_dec),
+            _ => Some((val0_dec, val1_dec)),
         };
 
         println!("{:?}", t);
@@ -476,18 +476,18 @@ fn rsplit_once() {
         let input_enc = encrypt_string(&client_key, t.input, t.pad);
         let pattern_enc = encrypt_string(&client_key, t.pattern, t.pad);
 
-        let opt_v = t.input.rsplit_once(t.pattern);
-        let opt_v = match opt_v {
-            Some(v) => Some(vec![v.0.to_string(), v.1.to_string()]),
-            None => None,
-        };
+        let opt_v = t
+            .input
+            .rsplit_once(t.pattern)
+            .map(|v| (v.0.to_string(), v.1.to_string()));
 
         let opt_v_enc = input_enc.rsplit_once(&server_key, &pattern_enc);
         let b_dec = client_key.0.decrypt::<u64>(&opt_v_enc.is_some);
-        let v_dec = opt_v_enc.val.decrypt(&client_key);
+        let val0_dec = opt_v_enc.val.0.decrypt(&client_key);
+        let val1_dec = opt_v_enc.val.1.decrypt(&client_key);
         let opt_v_dec = match b_dec {
             0 => None,
-            _ => Some(v_dec),
+            _ => Some((val0_dec, val1_dec)),
         };
 
         println!("{:?}", t);

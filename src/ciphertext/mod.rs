@@ -70,11 +70,15 @@ impl FheString {
         // Append terminating character.
         let term = k.0.encrypt(Self::TERMINATOR);
         let term = FheAsciiChar(term);
-        fhe_chars.push(term.clone());
+        fhe_chars.push(term);
 
         // Optional: Pad to length.
         if let Some(l) = l {
-            (0..l + 1 - fhe_chars.len()).for_each(|_| fhe_chars.push(term.clone()));
+            (0..l + 1 - fhe_chars.len()).for_each(|_| {
+                let term = k.0.encrypt(Self::TERMINATOR);
+                let term = FheAsciiChar(term);
+                fhe_chars.push(term.clone())
+            });
         }
 
         Ok(FheString(fhe_chars))
@@ -119,12 +123,31 @@ impl FheString {
         self.0.len() - 1
     }
 
+    /// Returns `self[..index]`.
+    pub fn substr_to(&self, k: &ServerKey, index: &RadixCiphertext) -> FheString {
+        let term = k.create_value(FheString::TERMINATOR);
+        let v = self
+            .0
+            .par_iter()
+            .enumerate()
+            .map(|(i, ai)| {
+                log::debug!("substr_to: at index {i}");
+
+                // a[i] = i < index ? a[i] : 0
+                let i_lt_index = k.k.scalar_gt_parallelized(index, i as Uint);
+                let ai = binary_if_then_else(k, &i_lt_index, &ai.0, &term);
+                FheAsciiChar(ai)
+            })
+            .collect();
+        FheString(v)
+    }
+
     /// Returns `self[index..]`.
-    pub fn substr(&self, k: &ServerKey, index: &RadixCiphertext) -> FheString {
+    pub fn substr_from(&self, k: &ServerKey, index: &RadixCiphertext) -> FheString {
         let v = (0..self.0.len())
             .into_par_iter()
             .map(|i| {
-                log::debug!("substr: at index {i}");
+                log::debug!("substr_from: at index {i}");
 
                 // a[i] = a[i + index]
                 let i_add_index = k.k.scalar_add_parallelized(index, i as Uint);

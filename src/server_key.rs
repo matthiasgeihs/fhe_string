@@ -20,19 +20,19 @@ impl Debug for ServerKey {
 }
 
 impl ServerKey {
-    /// Returns an encryption of zero.
+    /// Returns a trivial ciphertext with value `0`.
     pub fn create_zero(&self) -> RadixCiphertext {
         self.k
             .create_trivial_zero_radix::<RadixCiphertext>(self.num_blocks)
     }
 
-    /// Returns an encryption of one.
+    /// Returns a trivial ciphertext with value `1`.
     pub fn create_one(&self) -> RadixCiphertext {
         self.k
             .create_trivial_radix::<u8, RadixCiphertext>(1, self.num_blocks)
     }
 
-    /// Returns an encryption of the specified value.
+    /// Returns a trivial ciphertext with value `v`.
     pub fn create_value<T: DecomposableInto<u64>>(&self, v: T) -> RadixCiphertext {
         self.k
             .create_trivial_radix::<T, RadixCiphertext>(v, self.num_blocks)

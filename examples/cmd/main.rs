@@ -283,23 +283,38 @@ fn main() {
                 Box::new(r.decrypt(&args.client_key))
             },
         },
-        // TestCase {
-        //     name: |args| format!("\"{}\".split_once(\"{}\")", args.input, args.pattern),
-        //     std: |args| {
-        //         Box::new(
-        //             args.input
-        //                 .split_once(&args.pattern)
-        //                 .map(|s| s.to_string())
-        //                 .collect::<Vec<String>>(),
-        //         )
-        //     },
-        //     fhe: |args| {
-        //         let r = args
-        //             .input_enc
-        //             .split_once(&args.server_key, &args.pattern_enc);
-        //         Box::new(r.decrypt(&args.client_key))
-        //     },
-        // },
+        TestCase {
+            name: |args| format!("\"{}\".split_once(\"{}\")", args.input, args.pattern),
+            std: |args| {
+                Box::new(
+                    args.input
+                        .split_once(&args.pattern)
+                        .map(|s| (s.0.to_string(), s.1.to_string())),
+                )
+            },
+            fhe: |args| {
+                let r = args
+                    .input_enc
+                    .split_once(&args.server_key, &args.pattern_enc);
+                Box::new(decrypt_option_string_pair(&args.client_key, &r))
+            },
+        },
+        TestCase {
+            name: |args| format!("\"{}\".rsplit_once(\"{}\")", args.input, args.pattern),
+            std: |args| {
+                Box::new(
+                    args.input
+                        .rsplit_once(&args.pattern)
+                        .map(|s| (s.0.to_string(), s.1.to_string())),
+                )
+            },
+            fhe: |args| {
+                let r = args
+                    .input_enc
+                    .rsplit_once(&args.server_key, &args.pattern_enc);
+                Box::new(decrypt_option_string_pair(&args.client_key, &r))
+            },
+        },
     ];
 
     test_cases.iter().for_each(|t| {
@@ -382,6 +397,22 @@ fn decrypt_option_int(k: &ClientKey, opt: &FheOption<RadixCiphertext>) -> Option
         1 => {
             let val = k.decrypt::<u64>(&opt.val);
             Some(val as usize)
+        }
+        _ => panic!("expected 0 or 1, got {}", is_some),
+    }
+}
+
+fn decrypt_option_string_pair(
+    k: &ClientKey,
+    opt: &FheOption<(FheString, FheString)>,
+) -> Option<(String, String)> {
+    let is_some = k.decrypt::<u64>(&opt.is_some);
+    match is_some {
+        0 => None,
+        1 => {
+            let val0 = opt.val.0.decrypt(k);
+            let val1 = opt.val.1.decrypt(k);
+            Some((val0, val1))
         }
         _ => panic!("expected 0 or 1, got {}", is_some),
     }
