@@ -315,6 +315,50 @@ fn main() {
                 Box::new(decrypt_option_string_pair(&args.client_key, &r))
             },
         },
+        TestCase {
+            name: |args| {
+                format!(
+                    "\"{}\".splitn({}, \"{}\")",
+                    args.input, args.n, args.pattern,
+                )
+            },
+            std: |args| {
+                Box::new(
+                    args.input
+                        .splitn(args.n, &args.pattern)
+                        .map(|x| x.to_string())
+                        .collect::<Vec<_>>(),
+                )
+            },
+            fhe: |args| {
+                let r = args
+                    .input_enc
+                    .splitn(&args.server_key, &args.n_enc, &args.pattern_enc);
+                Box::new(r.decrypt(&args.client_key))
+            },
+        },
+        TestCase {
+            name: |args| {
+                format!(
+                    "\"{}\".rsplitn({}, \"{}\")",
+                    args.input, args.n, args.pattern,
+                )
+            },
+            std: |args| {
+                Box::new(
+                    args.input
+                        .rsplitn(args.n, &args.pattern)
+                        .map(|x| x.to_string())
+                        .collect::<Vec<_>>(),
+                )
+            },
+            fhe: |args| {
+                let r = args
+                    .input_enc
+                    .rsplitn(&args.server_key, &args.n_enc, &args.pattern_enc);
+                Box::new(r.decrypt(&args.client_key))
+            },
+        },
     ];
 
     test_cases.iter().for_each(|t| {
