@@ -82,6 +82,15 @@ fn main() {
     // Run operations on encrypted string.
 
     let test_cases: Vec<TestCase> = vec![
+        // len
+        TestCase {
+            name: |args| format!("\"{}\".len()", args.input,),
+            std: |args| Box::new(args.input.len()),
+            fhe: |args| {
+                let r = args.input_enc.len(&args.server_key);
+                Box::new(args.client_key.decrypt::<u64>(&r) as usize)
+            },
+        },
         // search
         TestCase {
             name: |args| format!("\"{}\".contains(\"{}\")", args.input, args.pattern),
@@ -425,6 +434,80 @@ fn main() {
                 Box::new(r.decrypt(&args.client_key))
             },
         },
+        // trim
+        TestCase {
+            name: |args| format!("\"{}\".trim()", args.input),
+            std: |args| Box::new(args.input.trim().to_string()),
+            fhe: |args| {
+                let r = args.input_enc.trim(&args.server_key);
+                Box::new(r.decrypt(&args.client_key))
+            },
+        },
+        TestCase {
+            name: |args| format!("\"{}\".trim_start()", args.input),
+            std: |args| Box::new(args.input.trim_start().to_string()),
+            fhe: |args| {
+                let r = args.input_enc.trim_start(&args.server_key);
+                Box::new(r.decrypt(&args.client_key))
+            },
+        },
+        TestCase {
+            name: |args| format!("\"{}\".trim_end()", args.input),
+            std: |args| Box::new(args.input.trim_end().to_string()),
+            fhe: |args| {
+                let r = args.input_enc.trim_end(&args.server_key);
+                Box::new(r.decrypt(&args.client_key))
+            },
+        },
+        TestCase {
+            name: |args| format!("\"{}\".strip_prefix(\"{}\")", args.input, args.pattern),
+            std: |args| {
+                Box::new(
+                    args.input
+                        .strip_prefix(&args.pattern)
+                        .map(|x| x.to_string()),
+                )
+            },
+            fhe: |args| {
+                let r = args
+                    .input_enc
+                    .strip_prefix(&args.server_key, &args.pattern_enc);
+                Box::new(decrypt_option_string(&args.client_key, &r))
+            },
+        },
+        TestCase {
+            name: |args| format!("\"{}\".strip_suffix(\"{}\")", args.input, args.pattern),
+            std: |args| {
+                Box::new(
+                    args.input
+                        .strip_suffix(&args.pattern)
+                        .map(|x| x.to_string()),
+                )
+            },
+            fhe: |args| {
+                let r = args
+                    .input_enc
+                    .strip_suffix(&args.server_key, &args.pattern_enc);
+                Box::new(decrypt_option_string(&args.client_key, &r))
+            },
+        },
+        // convert
+        TestCase {
+            name: |args| format!("\"{}\".to_lowercase()", args.input),
+            std: |args| Box::new(args.input.to_lowercase().to_string()),
+            fhe: |args| {
+                let r = args.input_enc.to_lowercase(&args.server_key);
+                Box::new(r.decrypt(&args.client_key))
+            },
+        },
+        TestCase {
+            name: |args| format!("\"{}\".to_uppercase()", args.input),
+            std: |args| Box::new(args.input.to_uppercase().to_string()),
+            fhe: |args| {
+                let r = args.input_enc.to_uppercase(&args.server_key);
+                Box::new(r.decrypt(&args.client_key))
+            },
+        },
     ];
 
     test_cases.iter().for_each(|t| {
@@ -507,6 +590,18 @@ fn decrypt_option_int(k: &ClientKey, opt: &FheOption<RadixCiphertext>) -> Option
         1 => {
             let val = k.decrypt::<u64>(&opt.val);
             Some(val as usize)
+        }
+        _ => panic!("expected 0 or 1, got {}", is_some),
+    }
+}
+
+fn decrypt_option_string(k: &ClientKey, opt: &FheOption<FheString>) -> Option<String> {
+    let is_some = k.decrypt::<u64>(&opt.is_some);
+    match is_some {
+        0 => None,
+        1 => {
+            let val = opt.val.decrypt(k);
+            Some(val)
         }
         _ => panic!("expected 0 or 1, got {}", is_some),
     }
