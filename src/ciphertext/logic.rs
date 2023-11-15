@@ -37,6 +37,17 @@ pub fn binary_and_vec(k: &ServerKey, v: &[RadixCiphertext]) -> RadixCiphertext {
     }
 }
 
+/// Returns 1 if an element of `v` is equal to 1. Otherwise returns `0`.
+///
+/// Expects that all elements of `v` are binary.
+pub fn binary_or_vec(k: &ServerKey, v: &[RadixCiphertext]) -> RadixCiphertext {
+    let sum = k.k.unchecked_sum_ciphertexts_slice_parallelized(v);
+    match sum {
+        None => k.create_zero(),
+        Some(sum) => k.k.scalar_gt_parallelized(&sum, 0 as Uint),
+    }
+}
+
 // Returns `a ? b : c`, assuming `a` is an encryption of a binary value.
 pub fn binary_if_then_else(
     k: &ServerKey,

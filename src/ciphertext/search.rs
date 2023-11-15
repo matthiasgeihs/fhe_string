@@ -7,14 +7,16 @@ use crate::{
 };
 
 use super::{
-    binary_and, index_of_unchecked, rindex_of_unchecked, FheAsciiChar, FheOption, FheString,
+    binary_and, index_of_unchecked, logic::binary_or_vec, rindex_of_unchecked, FheAsciiChar,
+    FheOption, FheString,
 };
 
 impl FheString {
     /// Returns whether `self` contains the string `s`. The result is an
     /// encryption of 1 if this is the case and an encryption of 0 otherwise.
     pub fn contains(&self, k: &ServerKey, s: &FheString) -> RadixCiphertext {
-        self.find(k, s).is_some
+        let found = self.find_all(k, s);
+        binary_or_vec(k, &found)
     }
 
     /// Returns the index of the first occurrence of `s`, if existent.
