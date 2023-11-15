@@ -21,7 +21,7 @@ cargo test --release -- --test-threads=1 -Z unstable-options --report-time
 ## Example `cmd`
 
 ```bash
-cargo run --example cmd --release -- --input " A bcbc " --pattern b
+cargo run --example cmd --release -- --input " A bcbc " --pattern bc
 ```
 
 ## Design decisions
