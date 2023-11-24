@@ -49,6 +49,8 @@ std = "["", "x", "x", "x", ""]"
 fhe = "["", "", ""]"
 ```
 
+- *Functions on `FheString` instead of `ServerKey`:* The bounty description asks for the string functions to be implemented on the server key type. Instead, we opted for implementing the functions on the FHE string type, as we found this to be more intuitive.
+
 ### Possible optimizations if unpadded strings are avalailable
 
 The following functions can be sped up if they are run on encrypted strings with of known length.
@@ -60,6 +62,4 @@ The following functions can be sped up if they are run on encrypted strings with
   where the boundaries are. if we know the length, we can just append.
 
 ## TODO
-- ensure that no constructed `FheStringSliceVector` is longer than
-  Key::max_int because otherwise we can't ensure correct indexing
-- Work on any the known limitations? (e.g., `split` with empty pattern)
+- Work on any of the known limitations? (e.g., move string functions from `FheString` to `ServerKey`, add support for `split` with empty pattern)
