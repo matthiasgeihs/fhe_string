@@ -1,9 +1,18 @@
 # fhe_string
 
-Library for computing on encrypted strings using [tfhe-rs](https://github.com/zama-ai/tfhe-rs).
+`fhe_string` is a library for computing on encrypted strings using [tfhe-rs](https://github.com/zama-ai/tfhe-rs).
+It has been developed for the Zama Bounty Program, Season 4, bounty ["Create a string library that works on encrypted data using TFHE-rs"](https://github.com/zama-ai/bounty-program/issues/80).
 
-## Test
+## Example `cmd`
 
+The `cmd` example runs a number of string operations on encryptions of the given input string and pattern.
+```bash
+cargo run --example cmd --release -- --input " A bcbc " --pattern "bc"
+```
+
+## Development
+
+The following commands can be used for testing and evaluation during development.
 ```bash
 # all tests
 cargo test --release
@@ -18,30 +27,17 @@ RUST_LOG=debug RUST_BACKTRACE=1 cargo test --release "tests::$TEST_NAME" -- --no
 cargo test --release -- --test-threads=1 -Z unstable-options --report-time
 ```
 
-## Example `cmd`
+## State of this project
 
-```bash
-cargo run --example cmd --release -- --input " A bcbc " --pattern bc
-```
+Up to this point, the library is developed under the principle **"everything encrypted first"**. This means that support for operations on encrypted inputs with hidden length is prioritized over support for operations where parts of the input (e.g., the pattern) is not encrypted, or where the strings are encrypted in way that leaks their length.
 
-## Design decisions
+### Known limitations
 
-- Everything encrypted first.
+- *Cleartext API not implemented:* Due to time constraints, a dedicated cleartext API, where parts of the input are provided in cleartext, has not been implemented. However, these operations can obviously be emulated, albeit at lower performance in some cases, by also encrypting the cleartext inputs and then calling the ciphertext API.
 
-## TODO
+- *Unpadded strings not implemented:* The original bounty description stated that all strings should be 0-padded. Later, this requirement was relaxed (see note in [bounty description](https://github.com/zama-ai/bounty-program/issues/80)) to allow for unpadded strings that are also indentifiable as such without decryption. Due to time constraints and the principle mentioned above, we did not add this feature yet.
 
-- implement example app
-
-- improve speed of `repeat`
-
-- implement cleartext api
-
-- implement non-zero terminated strings
-
-- ensure that no constructed `FheStringSliceVector` is longer than
-  Key::max_int because otherwise we can't ensure correct indexing
-
-- `split`: Support for empty pattern
+- *Function `split` deviates for empty pattern*: Running `split` with an empty pattern is a special case. Some languages like `Python` disallow it entirely. `Rust` in this case returns a character-wise representation of the input string. Our implementation currently does not handle the empty pattern as a special case and produces a list of empty characters with length the input string as a result (see the example below).
 ```
 TestCase {
     input: "xxx",
@@ -53,12 +49,17 @@ std = "["", "x", "x", "x", ""]"
 fhe = "["", "", ""]"
 ```
 
-## Notes
+### Possible optimizations if unpadded strings are avalailable
 
-Functions that can be sped up when it is known whether padding is used:
+The following functions can be sped up if they are run on encrypted strings with of known length.
+
 - `ends_with`: currently need to go through whole string because we don't know
   length. then only need to compare the respective ends of the two encrypted
   strings.
 - `add`, `repeat`: currently this is a quadratic operation because we don't know
   where the boundaries are. if we know the length, we can just append.
 
+## TODO
+- ensure that no constructed `FheStringSliceVector` is longer than
+  Key::max_int because otherwise we can't ensure correct indexing
+- Work on any the known limitations? (e.g., `split` with empty pattern)
