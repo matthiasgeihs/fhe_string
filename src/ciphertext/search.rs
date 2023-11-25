@@ -34,7 +34,7 @@ impl FheString {
         (0..self.0.len() - 1)
             .into_par_iter()
             .map(|i| {
-                log::debug!("find_all: at index {i}");
+                log::trace!("find_all: at index {i}");
                 self.substr_eq(k, i, s)
             })
             .collect::<Vec<_>>()

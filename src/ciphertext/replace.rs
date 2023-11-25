@@ -59,7 +59,7 @@ impl FheString {
         let mut v = Vec::<FheAsciiChar>::new();
         let zero = k.create_zero();
         (0..l).for_each(|i| {
-            log::debug!("replace_nopt: at index {i}");
+            log::trace!("replace_nopt: at index {i}");
 
             // c = i + n * len_diff
             let n_mul_lendiff = k.k.mul_parallelized(&n, &len_diff);

@@ -102,7 +102,7 @@ impl FheString {
             .par_windows(2)
             .enumerate()
             .map(|(i_sub_1, pair)| {
-                log::debug!("len: at index {i_sub_1}");
+                log::trace!("len: at index {i_sub_1}");
                 let self_isub1 = &pair[0];
                 let self_i = &pair[1];
                 let self_isub1_neq_0 = k.k.scalar_ne_parallelized(&self_isub1.0, 0);
@@ -131,7 +131,7 @@ impl FheString {
             .par_iter()
             .enumerate()
             .map(|(i, ai)| {
-                log::debug!("substr_to: at index {i}");
+                log::trace!("substr_to: at index {i}");
 
                 // a[i] = i < index ? a[i] : 0
                 let i_lt_index = k.k.scalar_gt_parallelized(index, i as Uint);
@@ -147,7 +147,7 @@ impl FheString {
         let v = (0..self.0.len())
             .into_par_iter()
             .map(|i| {
-                log::debug!("substr_from: at index {i}");
+                log::trace!("substr_from: at index {i}");
 
                 // a[i] = a[i + index]
                 let i_add_index = k.k.scalar_add_parallelized(index, i as Uint);
@@ -167,7 +167,7 @@ impl FheString {
         let v = (0..self.0.len())
             .into_par_iter()
             .map(|i| {
-                log::debug!("substr_end: at index {i}");
+                log::trace!("substr_end: at index {i}");
 
                 // a[i] = i + index < end ? a[i + index] : 0
                 let i_add_index = k.k.scalar_add_parallelized(start, i as Uint);
@@ -194,7 +194,7 @@ impl FheString {
             .par_iter()
             .enumerate()
             .map(|(j, aj)| {
-                log::debug!("char_at: at index {j}");
+                log::trace!("char_at: at index {j}");
 
                 // i == j ? a[j] : 0
                 let i_eq_j = k.k.scalar_eq_parallelized(i, j as Uint);
@@ -238,7 +238,7 @@ pub fn element_at(k: &ServerKey, v: &[RadixCiphertext], i: &RadixCiphertext) -> 
         .par_iter()
         .enumerate()
         .map(|(j, aj)| {
-            log::debug!("element_at: at index {j}");
+            log::trace!("element_at: at index {j}");
 
             // i == j ? a[j] : 0
             let i_eq_j = k.k.scalar_eq_parallelized(i, j as Uint);
@@ -298,7 +298,7 @@ fn index_of_unchecked_with_options<T: Sync>(
 
     // Find first index for which predicate evaluated to 1.
     p_eval.into_iter().for_each(|(i, pi)| {
-        log::debug!("index_of_opt_unchecked: at index {i}");
+        log::trace!("index_of_opt_unchecked: at index {i}");
 
         // index = b ? index : (pi ? i : 0)
         let pi_mul_i = k.k.scalar_mul_parallelized(&pi, *i as Uint);

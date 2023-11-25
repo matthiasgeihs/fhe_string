@@ -23,7 +23,7 @@ impl FheString {
         let n_mul_self_len = k.k.mul_parallelized(n, &self_len);
         let mut v = (0..l)
             .map(|i| {
-                log::debug!("repeat: at index {i}");
+                log::trace!("repeat: at index {i}");
 
                 // v[i] = i < n * self.len ? self[i % self.len] : 0
                 let i_radix = k.create_value(i as Uint);

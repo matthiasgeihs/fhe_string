@@ -265,7 +265,7 @@ impl FheString {
         let mut elems = (0..n)
             .rev()
             .map(|i| {
-                log::debug!("split_opt: at index {i}");
+                log::trace!("split_opt: at index {i}");
 
                 // is_some_i = i == 0 || matches[i - p.len]
                 let is_some = if i == 0 {
