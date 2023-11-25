@@ -20,7 +20,7 @@ cargo test --release
 cargo test --release -- --test-threads=1
 
 # single test with log
-RUST_LOG=debug RUST_BACKTRACE=1 cargo test --release "tests::$TEST_NAME" -- --nocapture --exact
+RUST_LOG=debug RUST_BACKTRACE=1 cargo test --release "ciphertext::tests::insert::add" -- --nocapture --exact
 
 # all tests with time measurement (nightly only)
 cargo test --release -- --test-threads=1 -Z unstable-options --report-time
@@ -56,13 +56,14 @@ fhe = "["", "", ""]"
 
 ### Possible optimizations if unpadded strings are available
 
-The following functions can be sped up if we decide to add support encrypted strings of known length at a later point in time.
+Currently, all encrypted strings are padded using encryptions of 0 to hide their length.
+In the following, we outline how a number of string functions could be optimized if we decide to add support for unpadded encrypted strings in the future.
 
 - `ends_with`: currently need to go through whole string because we don't know
   length. then only need to compare the respective ends of the two encrypted
   strings.
 - `add`, `repeat`: currently this is a quadratic operation because we don't know
-  where the boundaries are. if we know the length, we can just append.
+  where the boundaries are. if we don't have padding, we can just append.
 
 ### TODO
 - Work on any of the known limitations? (e.g., add support for `split` with empty pattern)
