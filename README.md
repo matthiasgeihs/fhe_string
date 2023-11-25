@@ -1,7 +1,6 @@
 # fhe_string
 
 `fhe_string` is a library for computing on encrypted strings using [tfhe-rs](https://github.com/zama-ai/tfhe-rs).
-It has been developed for the Zama Bounty Program, Season 4, bounty ["Create a string library that works on encrypted data using TFHE-rs"](https://github.com/zama-ai/bounty-program/issues/80).
 
 ## Example `cmd`
 
@@ -28,6 +27,8 @@ cargo test --release -- --test-threads=1 -Z unstable-options --report-time
 ```
 
 ## State of this project
+
+This library has been developed for the [Zama Bounty Program](https://github.com/zama-ai/bounty-program), specifically for the Season 4 bounty ["Create a string library that works on encrypted data using TFHE-rs"](https://github.com/zama-ai/bounty-program/issues/80).
 
 Up to this point, the library is developed under the principle **"everything encrypted first"**. This means that support for operations on encrypted inputs with hidden length is prioritized over support for operations where parts of the input (e.g., the pattern) is not encrypted, or where the strings are encrypted in way that leaks their length.
 
@@ -63,5 +64,6 @@ The following functions can be sped up if we decide to add support encrypted str
 - `add`, `repeat`: currently this is a quadratic operation because we don't know
   where the boundaries are. if we know the length, we can just append.
 
-## TODO
+### TODO
 - Work on any of the known limitations? (e.g., add support for `split` with empty pattern)
+- Remove "TODO" section before submission
