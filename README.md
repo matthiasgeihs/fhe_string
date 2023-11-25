@@ -7,6 +7,9 @@
 The `cmd` example runs a number of string operations on encryptions of the given input string and pattern.
 ```bash
 cargo run --example cmd --release -- --input " A bcbc " --pattern "bc"
+
+# list all options
+cargo run --example cmd --release -- --help
 ```
 
 ## Development

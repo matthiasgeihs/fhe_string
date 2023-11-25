@@ -9,28 +9,27 @@ use fhe_string::{
 };
 use tfhe::{integer::RadixCiphertext, shortint::prelude::PARAM_MESSAGE_2_CARRY_2_KS_PBS};
 
-/// Run operations on an encrypted string.
+/// Run string operations in the encrypted domain.
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Args {
-    /// Input string to encrypt and run operations on.
+    /// Input string to run operations on.
     #[arg(long)]
     input: String,
 
-    /// Pattern to be used for operations on encrypted input string.
+    /// Pattern to be used for pattern-based string operations.
     #[arg(long)]
     pattern: String,
 
-    /// Pattern to be used for operations on encrypted input string.
+    /// Substituion string to be used for string replacement operations.
     #[arg(long, default_value = "_")]
     substitution: String,
 
-    /// Length encrypted strings are padded to. If `None`, no additional padding
-    /// is applied.
+    /// Target string length after padding. If not provided, minimal padding is applied.
     #[arg(long)]
     pad: Option<usize>,
 
-    /// Value used for parameter `n`.
+    /// Value used for operations that require parameter `n`.
     #[arg(long, default_value_t = 3)]
     n: usize,
 }
