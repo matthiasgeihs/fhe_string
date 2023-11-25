@@ -1,12 +1,7 @@
 use std::{any::Any, fmt::Debug, ops::Add, time::Instant};
 
 use clap::Parser;
-use fhe_string::{
-    ciphertext::{FheOption, FheString},
-    client_key::ClientKey,
-    generate_keys,
-    server_key::ServerKey,
-};
+use fhe_string::{generate_keys, ClientKey, FheOption, FheString, ServerKey};
 use tfhe::{integer::RadixCiphertext, shortint::prelude::PARAM_MESSAGE_2_CARRY_2_KS_PBS};
 
 /// Run string operations in the encrypted domain.
@@ -124,7 +119,7 @@ fn main() {
             std: |args| Box::new(args.input.find(&args.pattern)),
             fhe: |args| {
                 let r = args.input_enc.find(&args.server_key, &args.pattern_enc);
-                Box::new(decrypt_option_int(&args.client_key, &r))
+                Box::new(r.decrypt(&args.client_key).map(|x| x as usize))
             },
         },
         TestCase {
@@ -132,7 +127,7 @@ fn main() {
             std: |args| Box::new(args.input.rfind(&args.pattern)),
             fhe: |args| {
                 let r = args.input_enc.rfind(&args.server_key, &args.pattern_enc);
-                Box::new(decrypt_option_int(&args.client_key, &r))
+                Box::new(r.decrypt(&args.client_key).map(|x| x as usize))
             },
         },
         // compare
@@ -471,7 +466,7 @@ fn main() {
                 let r = args
                     .input_enc
                     .strip_prefix(&args.server_key, &args.pattern_enc);
-                Box::new(decrypt_option_string(&args.client_key, &r))
+                Box::new(r.decrypt(&args.client_key))
             },
         },
         TestCase {
@@ -487,7 +482,7 @@ fn main() {
                 let r = args
                     .input_enc
                     .strip_suffix(&args.server_key, &args.pattern_enc);
-                Box::new(decrypt_option_string(&args.client_key, &r))
+                Box::new(r.decrypt(&args.client_key))
             },
         },
         // convert
@@ -580,30 +575,6 @@ struct TestCase {
 fn decrypt_bool(k: &ClientKey, b: &RadixCiphertext) -> bool {
     let x = k.decrypt::<u64>(&b);
     int_to_bool(x)
-}
-
-fn decrypt_option_int(k: &ClientKey, opt: &FheOption<RadixCiphertext>) -> Option<usize> {
-    let is_some = k.decrypt::<u64>(&opt.is_some);
-    match is_some {
-        0 => None,
-        1 => {
-            let val = k.decrypt::<u64>(&opt.val);
-            Some(val as usize)
-        }
-        _ => panic!("expected 0 or 1, got {}", is_some),
-    }
-}
-
-fn decrypt_option_string(k: &ClientKey, opt: &FheOption<FheString>) -> Option<String> {
-    let is_some = k.decrypt::<u64>(&opt.is_some);
-    match is_some {
-        0 => None,
-        1 => {
-            let val = opt.val.decrypt(k);
-            Some(val)
-        }
-        _ => panic!("expected 0 or 1, got {}", is_some),
-    }
 }
 
 fn decrypt_option_string_pair(

@@ -1,3 +1,5 @@
+//! Functionality for string replacement.
+
 use tfhe::integer::RadixCiphertext;
 
 use crate::{

@@ -1,28 +1,31 @@
+//! Types and functionality for working with encrypted strings.
+
+use std::error::Error;
+
 use crate::{
     ciphertext::logic::{binary_and, binary_if_then_else, binary_not, binary_or},
     client_key::{ClientKey, Key},
-    error::Error,
     server_key::ServerKey,
 };
 use rayon::prelude::*;
 use tfhe::integer::RadixCiphertext;
 
-pub mod compare;
-pub mod convert;
-pub mod insert;
-pub mod logic;
-pub mod replace;
-pub mod search;
+mod compare;
+mod convert;
+mod insert;
+mod logic;
+mod replace;
+mod search;
 pub mod split;
 #[cfg(test)]
 mod tests;
-pub mod trim;
+mod trim;
 
 /// FheAsciiChar is a wrapper type for RadixCiphertext.
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct FheAsciiChar(pub(crate) RadixCiphertext);
 
-/// FheString is a wrapper type for Vec<FheAsciiChar>. It is assumed to be
+/// FheString is a wrapper type for `Vec<FheAsciiChar>`. It is assumed to be
 /// 0-terminated.
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct FheString(pub(crate) Vec<FheAsciiChar>);
@@ -43,7 +46,7 @@ impl FheString {
     /// * `s` - The string to be encrypted.
     /// * `k` - The client key.
     /// * `l` - Optional length to pad to.
-    pub fn new(k: &ClientKey, s: &str, l: Option<usize>) -> Result<Self, Error> {
+    pub fn new(k: &ClientKey, s: &str, l: Option<usize>) -> Result<Self, Box<dyn Error>> {
         if !s.is_ascii() {
             return Err("string is not ascii".into());
         } else if s.chars().find(|&x| x as Uint == Self::TERMINATOR).is_some() {
@@ -231,7 +234,7 @@ impl FheString {
     }
 }
 
-// Return the value of v[i] or 0 if i is out of bounds.
+/// Given `v` and `Enc(i)`, return `v[i]`. Returns `0` if `i` is out of bounds.
 pub fn element_at(k: &ServerKey, v: &[RadixCiphertext], i: &RadixCiphertext) -> RadixCiphertext {
     // ai = i == 0 ? a[0] : 0 + ... + i == n ? a[n] : 0
     let v = v
@@ -314,7 +317,38 @@ fn index_of_unchecked_with_options<T: Sync>(
     }
 }
 
+/// FheOption represents an encrypted option type.
 pub struct FheOption<T> {
+    /// Whether this option decrypts to `Some` or `None`.
     pub is_some: RadixCiphertext,
+    /// The optional value.
     pub val: T,
+}
+
+impl FheOption<RadixCiphertext> {
+    pub fn decrypt(&self, k: &ClientKey) -> Option<Uint> {
+        let is_some = k.decrypt::<Uint>(&self.is_some);
+        match u64::from(is_some) {
+            0 => None,
+            1 => {
+                let val = k.decrypt::<Uint>(&self.val);
+                Some(val)
+            }
+            _ => panic!("expected 0 or 1, got {}", is_some),
+        }
+    }
+}
+
+impl FheOption<FheString> {
+    pub fn decrypt(&self, k: &ClientKey) -> Option<String> {
+        let is_some = k.decrypt::<Uint>(&self.is_some);
+        match u64::from(is_some) {
+            0 => None,
+            1 => {
+                let val = self.val.decrypt(k);
+                Some(val)
+            }
+            _ => panic!("expected 0 or 1, got {}", is_some),
+        }
+    }
 }

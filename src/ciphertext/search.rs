@@ -1,3 +1,5 @@
+//! Functionality for string search.
+
 use rayon::prelude::*;
 use tfhe::integer::RadixCiphertext;
 

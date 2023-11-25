@@ -1,3 +1,5 @@
+//! Functionality for logical operations.
+
 use tfhe::integer::RadixCiphertext;
 
 use crate::server_key::ServerKey;

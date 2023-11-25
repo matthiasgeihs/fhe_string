@@ -1,3 +1,5 @@
+//! Functionality for string trimming.
+
 use rayon::{join, prelude::*};
 use tfhe::integer::RadixCiphertext;
 

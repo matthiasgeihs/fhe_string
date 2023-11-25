@@ -1,3 +1,5 @@
+//! Functionality for string splitting.
+
 use rayon::prelude::*;
 use tfhe::integer::RadixCiphertext;
 

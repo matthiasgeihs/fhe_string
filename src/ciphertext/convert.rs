@@ -1,3 +1,5 @@
+//! Functionality for string conversion.
+
 use rayon::prelude::*;
 use tfhe::integer::RadixCiphertext;
 

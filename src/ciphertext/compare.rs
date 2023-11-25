@@ -1,3 +1,5 @@
+//! Functionality for string comparison.
+
 use std::cmp;
 
 use rayon::{join, prelude::*};

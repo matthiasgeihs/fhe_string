@@ -1,11 +1,14 @@
-use client_key::ClientKey;
-use server_key::ServerKey;
+//! This library provides functionality for operating on encrypted strings.
+
 use tfhe::{integer::gen_keys_radix, shortint::ClassicPBSParameters};
 
-pub mod ciphertext;
-pub mod client_key;
-pub mod error;
-pub mod server_key;
+pub use ciphertext::{split::FheStringSliceVector, FheAsciiChar, FheOption, FheString};
+pub use client_key::ClientKey;
+pub use server_key::ServerKey;
+
+mod ciphertext;
+mod client_key;
+mod server_key;
 
 /// Generates a fresh key pair for handling encrypted strings up to length
 /// `2^8-1`.

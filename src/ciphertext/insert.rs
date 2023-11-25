@@ -1,3 +1,5 @@
+//! Functionality for string insertion.
+
 use tfhe::integer::RadixCiphertext;
 
 use rayon::{join, prelude::*};

@@ -1,3 +1,6 @@
+//! This module covers the server key that is used for operating on encrypted
+//! strings.
+
 use std::fmt::Debug;
 
 use tfhe::integer::{
@@ -6,6 +9,7 @@ use tfhe::integer::{
 
 use crate::client_key::Key;
 
+/// A key used by the server for operations on encrypted strings.
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct ServerKey {
     pub(crate) k: IntegerServerKey,

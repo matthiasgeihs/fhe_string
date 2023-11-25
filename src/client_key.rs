@@ -1,3 +1,6 @@
+//! This module covers the client key that is used for encryption and
+//! decryption.
+
 use tfhe::{
     core_crypto::prelude::UnsignedNumeric,
     integer::{
@@ -6,10 +9,12 @@ use tfhe::{
     },
 };
 
+/// A key used by the client for string encryption and decryption.
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct ClientKey(pub(crate) RadixClientKey);
 
 impl ClientKey {
+    /// Encrypt a single element.
     pub fn encrypt<T: DecomposableInto<u64> + UnsignedNumeric>(
         &self,
         message: T,
@@ -17,11 +22,13 @@ impl ClientKey {
         self.0.encrypt(message)
     }
 
+    /// Decrypt a single element.
     pub fn decrypt<T: RecomposableFrom<u64> + UnsignedNumeric>(&self, ct: &RadixCiphertext) -> T {
         self.0.decrypt(ct)
     }
 }
 
+/// A trait for operations common on client key and server key.
 pub trait Key {
     /// Returns the maximum value that can be stored in a ciphertext.
     fn max_int(&self) -> usize;

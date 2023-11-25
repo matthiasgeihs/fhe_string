@@ -14,7 +14,7 @@ cargo run --example cmd --release -- --help
 
 ## Development
 
-The following commands can be used for testing and evaluation during development.
+The following commands can be used for testing, evaluation, and docs generation during development.
 ```bash
 # all tests
 cargo test --release
@@ -27,6 +27,9 @@ RUST_LOG=debug RUST_BACKTRACE=1 cargo test --release "ciphertext::tests::insert:
 
 # all tests with time measurement (nightly only)
 cargo test --release -- --test-threads=1 -Z unstable-options --report-time
+
+# generate docs
+cargo doc --no-deps --open
 ```
 
 ## State of this project
@@ -44,6 +47,8 @@ Up to this point, the library is developed under the principle **"everything enc
 - *String functions are implemented on `FheString` instead of `ServerKey`:* The bounty description asks for the string functions to be implemented on the server key type. However, we found it to be more intuitive to have the functions on the `FheString` type, as is the case with the regular string functions. (Obviously, this can easily be changed on request.)
 
 - *Code is provided as a standalone library instead of as a `tfhe-rs` example:* The bounty description asks for the code be provided as an example of the `tfhe-rs` codebase. However, we found that compilation times are much longer when developing an example compared to when developing a standalone library. As this was limiting code iteration time, we decided to develop and provide the code in form of a standalone library. (Obviously, this can easily be changed on request.)
+
+- *Restricted to strings of length < 256:* Currently, the library does not support encrypted strings longer than 255 characters. This is a deliberate limitation due to the fact that we need 8 bit to represent ASCII characters and therefore the lower bound for the size of encrypted values is 256. At the same time, in order to support all of our encrypted string operations, we need to be able to represent encrypted integers up to the maximum length. We could have opted for supporting longer strings (in fact, this is an easy change to the key generation function), but we felt that 256 characters is more than enough initially, given that performance is limited anyways.
 
 - *Function `split` deviates from standard behavior when called with empty pattern*: Running `split` with an empty pattern is a special case. Some languages like `Python` disallow it entirely. `Rust` in this case returns a character-wise representation of the input string. Our implementation currently does not handle the empty pattern as a special case and produces a list of empty characters with length the input string as a result due to the way the algorithm works. See below for an example output comparison.
 ```
