@@ -37,7 +37,7 @@ Up to this point, the library is developed under the principle **"everything enc
 
 - *Unpadded strings not implemented:* The original bounty description stated that all strings should be 0-padded. Later, this requirement was relaxed (see note in [bounty description](https://github.com/zama-ai/bounty-program/issues/80)) to allow for unpadded strings that are also indentifiable as such without decryption. Due to time constraints and the principle mentioned above, we did not add this feature yet.
 
-- *Function `split` deviates for empty pattern*: Running `split` with an empty pattern is a special case. Some languages like `Python` disallow it entirely. `Rust` in this case returns a character-wise representation of the input string. Our implementation currently does not handle the empty pattern as a special case and produces a list of empty characters with length the input string as a result (see the example below).
+- *Function `split` deviates from standard behavior when called with empty pattern*: Running `split` with an empty pattern is a special case. Some languages like `Python` disallow it entirely. `Rust` in this case returns a character-wise representation of the input string. Our implementation currently does not handle the empty pattern as a special case and produces a list of empty characters with length the input string as a result due to the way the algorithm works. See below for an example output comparison.
 ```
 TestCase {
     input: "xxx",
@@ -49,11 +49,13 @@ std = "["", "x", "x", "x", ""]"
 fhe = "["", "", ""]"
 ```
 
-- *Functions on `FheString` instead of `ServerKey`:* The bounty description asks for the string functions to be implemented on the server key type. Instead, we opted for implementing the functions on the FHE string type, as we found this to be more intuitive.
+- *String functions are implemented on `FheString` instead of `ServerKey`:* The bounty description asks for the string functions to be implemented on the server key type. However, we found it to be more intuitive to have the functions on the `FheString` type, as is the case with the regular string functions. (Obviously, this can easily be changed on request.)
 
-### Possible optimizations if unpadded strings are avalailable
+- *Code is provided as a standalone library instead of as a `tfhe-rs` example:* The bounty description asks for the code be provided as an example of the `tfhe-rs` codebase. However, we found that compilation times are much longer when developing an example compared to when developing a standalone library. As this was limiting code iteration time, we decided to develop and provide the code in form of a standalone library. (Obviously, this can easily be changed on request.)
 
-The following functions can be sped up if they are run on encrypted strings with of known length.
+### Possible optimizations if unpadded strings are available
+
+The following functions can be sped up if we decide to add support encrypted strings of known length at a later point in time.
 
 - `ends_with`: currently need to go through whole string because we don't know
   length. then only need to compare the respective ends of the two encrypted
@@ -62,4 +64,4 @@ The following functions can be sped up if they are run on encrypted strings with
   where the boundaries are. if we know the length, we can just append.
 
 ## TODO
-- Work on any of the known limitations? (e.g., move string functions from `FheString` to `ServerKey`, add support for `split` with empty pattern)
+- Work on any of the known limitations? (e.g., add support for `split` with empty pattern)
