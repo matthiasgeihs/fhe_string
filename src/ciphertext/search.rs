@@ -157,8 +157,15 @@ impl FheString {
     pub fn rfind(&self, k: &ServerKey, s: &FheString) -> FheOption<RadixCiphertext> {
         let found = self.find_all(k, s);
 
-        // Determine index of first match in reversed order.
-        rindex_of_unchecked(k, &found, |_k, x| x.clone())
+        // Determine index of first match in reverse order.
+        let last = rindex_of_unchecked(k, &found, |_k, x| x.clone());
+
+        // If empty pattern, return length. Otherwise return last index.
+        let empty = s.is_empty(k);
+        FheOption {
+            is_some: binary_if_then_else(k, &empty, &k.create_one(), &last.is_some),
+            val: binary_if_then_else(k, &empty, &self.len(k), &last.val),
+        }
     }
 
     /// Searches `self` for the first index `j >= i` with `p(self[j]) == 1`.
