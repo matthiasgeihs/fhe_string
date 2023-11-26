@@ -4,7 +4,7 @@
 //!
 //! ```
 //! use tfhe::shortint::parameters::PARAM_MESSAGE_2_CARRY_2_KS_PBS;
-//! use fhe_string::{ClientKey, ServerKey, generate_keys, EncryptString};
+//! use fhe_string::{ClientKey, ServerKey, generate_keys, StringEncryption};
 //!
 //! let (client_key, server_key) = generate_keys(PARAM_MESSAGE_2_CARRY_2_KS_PBS);
 //!

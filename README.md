@@ -79,3 +79,4 @@ In the following, we outline how a number of string functions could be optimized
 ### TODO
 - Work on any of the known limitations? (e.g., add support for `split` with empty pattern)
 - Remove "TODO" section before submission
+- **Fix doc test (`"a,b,c".split(",")` where `"a,b,c"` is padded to length 8)**
