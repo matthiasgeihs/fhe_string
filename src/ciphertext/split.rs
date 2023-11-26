@@ -1,7 +1,5 @@
 //! Functionality for string splitting.
 
-use std::cmp;
-
 use rayon::prelude::*;
 use tfhe::integer::RadixCiphertext;
 
@@ -181,6 +179,7 @@ impl FheStringSliceVector {
     fn expand_last(&mut self, k: &ServerKey) {
         // Find the last item and set its end point to s.max_len.
         let mut not_found = k.create_one();
+        let self_len = self.len(k);
         let mut v = self
             .v
             .iter()
@@ -188,8 +187,7 @@ impl FheStringSliceVector {
             .map(|vi| {
                 // end = not_found && vi.is_some ? self.s.max_len : vi.end
                 let not_found_and_some = binary_and(k, &not_found, &vi.is_some);
-                let max_len = k.create_value(self.s.max_len() as Uint);
-                let end = binary_if_then_else(k, &not_found_and_some, &max_len, &vi.val.end);
+                let end = binary_if_then_else(k, &not_found_and_some, &self_len, &vi.val.end);
 
                 // not_found = not_found && !vi.is_some
                 let not_some = binary_not(k, &vi.is_some);
@@ -219,7 +217,7 @@ impl FheStringSliceVector {
                     0 => None,
                     _ => {
                         let start = k.0.decrypt::<Uint>(&vi.val.start) as usize;
-                        let end = cmp::min(k.0.decrypt::<Uint>(&vi.val.end) as usize, s_dec.len());
+                        let end = k.0.decrypt::<Uint>(&vi.val.end) as usize;
                         let slice = s_dec.get(start..end).unwrap_or_default();
                         log::trace!("decrypt slice: [{start}, {end}]");
                         Some(slice.to_string())
@@ -263,9 +261,10 @@ impl FheString {
             self.find_all_non_overlapping(k, p)
         };
         let p_len = p.len(k);
+        let self_len = self.len(k);
 
         let n = self.max_len() + 1; // Maximum number of entries.
-        let mut next_match = k.create_value(self.max_len() as Uint);
+        let mut next_match = self_len.clone();
         let zero = k.create_zero();
         let mut elems = (0..n)
             .rev()
@@ -431,6 +430,7 @@ impl FheString {
             val: zero.clone(),
         };
 
+        let self_len = self.len(k);
         let v = self
             .0
             .par_iter()
@@ -447,9 +447,8 @@ impl FheString {
 
                 // end = s.index_of_next_white_space_or_max_len(i+1);
                 let index_of_next = next_whitespace.get(i + 1).unwrap_or(&opt_default);
-                let max_len = k.create_value(self.max_len() as Uint);
                 let end =
-                    binary_if_then_else(k, &index_of_next.is_some, &index_of_next.val, &max_len);
+                    binary_if_then_else(k, &index_of_next.is_some, &index_of_next.val, &self_len);
 
                 FheOption {
                     is_some,
