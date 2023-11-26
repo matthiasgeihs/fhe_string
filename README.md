@@ -14,7 +14,7 @@ cargo run --example cmd --release -- --help
 
 ## Development
 
-The following commands can be used for testing, evaluation, and docs generation during development.
+The following commands can be used for testing, evaluation, and documentation during development.
 ```bash
 # all tests
 cargo test --release
@@ -30,6 +30,9 @@ cargo test --release -- --test-threads=1 -Z unstable-options --report-time
 
 # generate docs
 cargo doc --no-deps --open
+
+# run doc tests
+cargo test --doc --release -- --show-output
 ```
 
 ## State of this project
