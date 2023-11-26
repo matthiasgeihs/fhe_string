@@ -27,6 +27,11 @@ fn split() {
             pattern: "xx",
             pad: None,
         },
+        TestCase {
+            input: "axbxc",
+            pattern: "x",
+            pad: Some(8),
+        },
     ];
 
     test_cases.iter().enumerate().for_each(|(i, t)| {
@@ -77,6 +82,12 @@ fn splitn() {
             pad: None,
             n: 3,
         },
+        TestCase {
+            input: "axbxc",
+            pattern: "x",
+            pad: Some(8),
+            n: 2,
+        },
     ];
 
     test_cases.iter().enumerate().for_each(|(i, t)| {
@@ -124,6 +135,11 @@ fn split_terminator() {
             pattern: "xx",
             pad: None,
         },
+        TestCase {
+            input: "axbxc",
+            pattern: "x",
+            pad: Some(8),
+        },
     ];
 
     test_cases.iter().enumerate().for_each(|(i, t)| {
@@ -170,6 +186,11 @@ fn split_inclusive() {
             pattern: "xx",
             pad: None,
         },
+        TestCase {
+            input: "axbxc",
+            pattern: "x",
+            pad: Some(8),
+        },
     ];
 
     test_cases.iter().enumerate().for_each(|(i, t)| {
@@ -211,6 +232,10 @@ fn split_ascii_whitespace() {
         TestCase {
             input: "ab",
             pad: None,
+        },
+        TestCase {
+            input: " x x x ",
+            pad: Some(8),
         },
     ];
 
@@ -272,6 +297,11 @@ fn rsplit() {
             pattern: "xx",
             pad: None,
         },
+        TestCase {
+            input: "axbxc",
+            pattern: "x",
+            pad: Some(8),
+        },
     ];
 
     test_cases.iter().enumerate().for_each(|(i, t)| {
@@ -317,6 +347,11 @@ fn rsplit_terminator() {
             input: "xxx",
             pattern: "xx",
             pad: None,
+        },
+        TestCase {
+            input: "axbxc",
+            pattern: "x",
+            pad: Some(8),
         },
     ];
 
@@ -368,6 +403,12 @@ fn rsplitn() {
             pad: None,
             n: 3,
         },
+        TestCase {
+            input: "axbxc",
+            pattern: "x",
+            pad: Some(8),
+            n: 2,
+        },
     ];
 
     test_cases.iter().enumerate().for_each(|(i, t)| {
@@ -414,6 +455,11 @@ fn split_once() {
             input: "xxx",
             pattern: "xx",
             pad: None,
+        },
+        TestCase {
+            input: "axbxc",
+            pattern: "x",
+            pad: Some(8),
         },
     ];
 
@@ -469,6 +515,11 @@ fn rsplit_once() {
             input: "xxx",
             pattern: "xx",
             pad: None,
+        },
+        TestCase {
+            input: "axbxc",
+            pattern: "x",
+            pad: Some(8),
         },
     ];
 
