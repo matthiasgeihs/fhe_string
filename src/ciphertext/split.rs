@@ -177,15 +177,15 @@ impl FheStringSliceVector {
 
     /// Expand the last slice to the end of the string.
     fn expand_last(&mut self, k: &ServerKey) {
-        // Find the last item and set its end point to s.max_len.
+        // Find the last item and set its end point to s.len.
         let mut not_found = k.create_one();
-        let self_len = self.len(k);
+        let self_len = self.s.len(k);
         let mut v = self
             .v
             .iter()
             .rev()
             .map(|vi| {
-                // end = not_found && vi.is_some ? self.s.max_len : vi.end
+                // end = not_found && vi.is_some ? self.s.len : vi.end
                 let not_found_and_some = binary_and(k, &not_found, &vi.is_some);
                 let end = binary_if_then_else(k, &not_found_and_some, &self_len, &vi.val.end);
 
