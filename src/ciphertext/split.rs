@@ -1,5 +1,7 @@
 //! Functionality for string splitting.
 
+use std::cmp;
+
 use rayon::prelude::*;
 use tfhe::integer::RadixCiphertext;
 
@@ -217,8 +219,9 @@ impl FheStringSliceVector {
                     0 => None,
                     _ => {
                         let start = k.0.decrypt::<Uint>(&vi.val.start) as usize;
-                        let end = k.0.decrypt::<Uint>(&vi.val.end) as usize;
+                        let end = cmp::min(k.0.decrypt::<Uint>(&vi.val.end) as usize, s_dec.len());
                         let slice = s_dec.get(start..end).unwrap_or_default();
+                        log::trace!("decrypt slice: [{start}, {end}]");
                         Some(slice.to_string())
                     }
                 }
