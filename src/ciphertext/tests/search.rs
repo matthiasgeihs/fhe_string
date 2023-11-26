@@ -31,6 +31,12 @@ fn find_rfind_contains() {
             b: "cde",
             b_pad: None,
         },
+        TestCase {
+            a: "abc",
+            a_pad: None,
+            b: "",
+            b_pad: None,
+        },
     ];
 
     test_cases.iter().for_each(|t| {
