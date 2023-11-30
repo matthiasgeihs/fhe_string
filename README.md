@@ -2,6 +2,20 @@
 
 `fhe_string` is a library for computing on encrypted strings using [tfhe-rs](https://github.com/zama-ai/tfhe-rs).
 
+```rust
+use tfhe::shortint::parameters::PARAM_MESSAGE_2_CARRY_2_KS_PBS;
+use fhe_string::{ClientKey, ServerKey, generate_keys, StringEncryption};
+
+let (client_key, server_key) = generate_keys(PARAM_MESSAGE_2_CARRY_2_KS_PBS);
+
+let (input, sep) = ("a,b,c", ",");
+let input_enc = input.encrypt(&client_key, Some(8)).unwrap(); // Pad to length 8.
+let sep_enc = sep.encrypt(&client_key, None).unwrap(); // No length padding.
+
+let result_enc = input_enc.split(&server_key, &sep_enc);
+assert_eq!(input.split(sep).collect::<Vec<_>>(), result_enc.decrypt(&client_key));
+```
+
 ## Example `cmd`
 
 The `cmd` example runs a number of string operations on encryptions of the given input string and pattern.
@@ -14,7 +28,7 @@ cargo run --example cmd --release -- --help
 
 ## Development
 
-The following commands can be used for testing, evaluation, and documentation during development.
+The following commands can be used for testing and evaluation.
 ```bash
 # all tests
 cargo test --release
@@ -23,11 +37,14 @@ cargo test --release
 cargo test --release -- --test-threads=1
 
 # single test with log
-RUST_LOG=debug RUST_BACKTRACE=1 cargo test --release "ciphertext::tests::insert::add" -- --nocapture --exact
+RUST_LOG=trace RUST_BACKTRACE=1 cargo test --release "ciphertext::tests::insert::add" -- --nocapture --exact
 
 # all tests with time measurement (nightly only)
 cargo test --release -- --test-threads=1 -Z unstable-options --report-time
+```
 
+The following commands are for generating docs and running doc tests.
+```bash
 # generate docs
 cargo doc --no-deps --open
 
@@ -37,23 +54,23 @@ cargo test --doc --release -- --show-output
 
 ## State of this project
 
-This library has been developed for the [Zama Bounty Program](https://github.com/zama-ai/bounty-program), specifically for the Season 4 bounty ["Create a string library that works on encrypted data using TFHE-rs"](https://github.com/zama-ai/bounty-program/issues/80).
+This project has been developed as a submission to the [Zama Bounty Program](https://github.com/zama-ai/bounty-program), specifically for the Season 4 bounty ["Create a string library that works on encrypted data using TFHE-rs"](https://github.com/zama-ai/bounty-program/issues/80).
 
-Up to this point, the library is developed under the principle **"everything encrypted first"**. This means that support for operations on encrypted inputs with hidden length is prioritized over support for operations where parts of the input (e.g., the pattern) is not encrypted, or where the strings are encrypted in way that leaks their length.
+The library is developed under the principle **"everything encrypted first"**. This means that support for operations with encrypted inputs is prioritized over support for operations where parts of the input (e.g., the pattern) is not encrypted, or where the strings are encrypted in a way that leaks their length.
 
 ### Known limitations
 
-- *Cleartext API not implemented:* Due to time constraints and because of the encryption-first principle mentioned above, a dedicated cleartext API, where parts of the input are provided in cleartext, has not been implemented. However, these operations can obviously be emulated, albeit at lower performance in some cases, by also encrypting the cleartext inputs and then calling the ciphertext API.
+- *No cleartext API:* Due to time constraints and because of the encryption-first principle mentioned above, a dedicated cleartext API, where parts of the input are provided in cleartext, has not been implemented. However, these operations can obviously be emulated, albeit at lower performance in some cases, by encrypting the cleartext inputs and then calling the ciphertext API.
 
-- *Unpadded strings not implemented:* The original bounty description stated that all strings should be 0-padded. Later, this requirement was relaxed (see note in [bounty description](https://github.com/zama-ai/bounty-program/issues/80)) to allow for unpadded strings that are also indentifiable as such without decryption. Due to time constraints and the principle mentioned above, we did not add this feature yet.
+- *No optimizations for unpadded strings:* The original bounty description stated that all strings should be 0-padded. Later, this requirement was relaxed (see note in [bounty description](https://github.com/zama-ai/bounty-program/issues/80)) to allow for unpadded strings that are indentifiable as such without decryption. Due to time constraints and the principle mentioned above, we did not add this feature yet.
 
-- *String functions are implemented on `FheString` instead of `ServerKey`:* The bounty description asks for the string functions to be implemented on the server key type. However, we found it to be more intuitive to have the functions on the `FheString` type, as is the case with the regular string functions. (Obviously, this can easily be changed on request.)
+- *String functions are implemented on `FheString` instead of `ServerKey`:* The bounty description asks for the string functions to be implemented on the server key type. However, we found it to be more intuitive to have the functions on the `FheString` type, similar to how regular string functions are available on their string type. (Obviously, this can easily be changed on request.)
 
-- *Code is provided as a standalone library instead of as a `tfhe-rs` example:* The bounty description asks for the code be provided as an example of the `tfhe-rs` codebase. However, we found that compilation times are much longer when developing an example compared to when developing a standalone library. As this was limiting code iteration time, we decided to develop and provide the code in form of a standalone library. (Obviously, this can easily be changed on request.)
+- *Code is provided as a standalone library instead of as a `tfhe-rs` example:* The bounty description asks for the code be provided as an example that is part of the `tfhe-rs` codebase. However, we found that compilation times were much longer when compiling the code in form of an example compared compiling it as a standalone library. As this was limiting code iteration time, we decided to develop and provide the code in form of a standalone library. (Obviously, this can easily be changed on request.)
 
-- *Restricted to strings of length < 256:* Currently, the library does not support encrypted strings longer than 255 characters. This is a deliberate limitation due to the fact that we need 8 bit to represent ASCII characters and therefore the lower bound for the size of encrypted values is 256. At the same time, in order to support all of our encrypted string operations, we need to be able to represent encrypted integers up to the maximum length. We could have opted for supporting longer strings (in fact, this is an easy change to the key generation function), but we felt that 256 characters is more than enough initially, given that performance is limited anyways.
+- *Restricted to strings of length < 256:* Currently, the library does not support encrypted strings longer than 255 characters. This is due to the fact that for our `FheString` algorithms to work, we need to be able to represent encrypted integers up to the maximum length. At the same time, the size of encrypted integers is fixed at key generation time. We could have opted for supporting longer strings (in fact, this is an easy change to the key generation function), but we felt that 256 characters is more than enough initially, considering the limited performance.
 
-- *Function `split` deviates from standard behavior when called with empty pattern*: Running `split` with an empty pattern is a special case. Some languages like `Python` disallow it entirely. `Rust` in this case returns a character-wise representation of the input string. Our implementation currently does not handle the empty pattern as a special case and produces a list of empty characters with length the input string as a result due to the way the algorithm works. See below for an example output comparison.
+- *Function `split` with empty pattern deviates from standard behavior*: Running `split` with an empty pattern is a special case. Some languages like `Python` disallow it entirely. `Rust` in this case returns a character-wise representation of the input string. Our implementation currently does not handle the empty pattern as a special case and produces a list of empty characters with length the input string as a result due to the way the algorithm works. See below for an example output comparison.
 ```
 TestCase {
     input: "xxx",
@@ -79,4 +96,4 @@ In the following, we outline how a number of string functions could be optimized
 ### TODO
 - Work on any of the known limitations? (e.g., add support for `split` with empty pattern)
 - Remove "TODO" section before submission
-- **Fix doc test (`"a,b,c".split(",")` where `"a,b,c"` is padded to length 8)**
+- In `split.rs`, when creating `FheOption.is_some` and `FheOption.start` for string slices, use proper encryption instead of `create_trivial`.
