@@ -246,12 +246,15 @@ impl FheString {
     ) -> FheStringSliceVector {
         /*
         matches = s.find_all_non_overlapping(k, p);
-        n = s.max_len + 1
-        next_match = s.max_len
+        n = s.len + 1
+        next_match = s.len
         let substrings = (0..n).rev().map(|i| {
-            is_start_i = i == 0 || matches[i - p.len]
-            next_match = matches[i] ? i + (inclusive ? p.len : 0) : next_match
-            end_i = next_match
+            next_match = matches[i] ? i : next_match
+            (
+                is_some: i == 0 || matches[i - p.len],
+                start: i,
+                end: next_match,
+            )
         })
          */
 
@@ -291,12 +294,11 @@ impl FheString {
                 let matches_i = matches.get(i).unwrap_or(&zero);
                 next_match = binary_if_then_else(k, matches_i, &next_match_target, &next_match);
 
-                let end = next_match.clone();
                 FheOption {
                     is_some,
                     val: FheStringSlice {
                         start: k.create_value(i as Uint),
-                        end,
+                        end: next_match.clone(),
                     },
                 }
             })
