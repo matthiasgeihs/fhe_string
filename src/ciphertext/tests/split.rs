@@ -28,8 +28,18 @@ fn split() {
             pad: None,
         },
         TestCase {
+            input: "abc",
+            pattern: "",
+            pad: None,
+        },
+        TestCase {
             input: "axbxc",
             pattern: "x",
+            pad: Some(8),
+        },
+        TestCase {
+            input: "abc",
+            pattern: "",
             pad: Some(8),
         },
     ];

@@ -246,12 +246,12 @@ impl FheString {
     ) -> FheStringSliceVector {
         /*
         matches = s.find_all_non_overlapping(k, p);
-        n = s.len + 2
+        n = s.max_len + 2
         next_match = s.len
         let substrings = (0..n).rev().map(|i| {
-            next_match = matches[i] || p.empty ? i + (inclusive ? p.len : 0) : next_match
+            next_match = matches[i] ? i + (inclusive ? p.len : 0) : next_match
             (
-                is_some: i == 0 || matches[i - p.len] || p.empty,
+                is_some: i == 0 || matches[i - p.len] || i > s.len + 2,
                 start: max(i - p.empty, 0),
                 end: next_match,
             )
@@ -271,6 +271,7 @@ impl FheString {
         let self_len = self.len(k);
 
         let n = self.max_len() + 2; // Maximum number of entries.
+        let n_hidden = k.k.scalar_add_parallelized(&self_len, 2 as Uint); // Better bound based on hidden length.
         let mut next_match = self_len.clone();
         let zero = k.create_zero();
         let mut elems = (0..n)
@@ -278,13 +279,15 @@ impl FheString {
             .map(|i| {
                 log::trace!("split_opt: at index {i}");
 
-                // is_some_i = i == 0 || matches[i - p.len]
+                // is_some_i = i == 0 || matches[i - p.len] && i < self.len + 2
                 let is_some = if i == 0 {
                     k.create_one()
                 } else {
                     let i_radix = k.create_value(i as Uint);
                     let i_sub_plen = k.k.sub_parallelized(&i_radix, &p_len);
-                    element_at(k, &matches, &i_sub_plen)
+                    let mi = element_at(k, &matches, &i_sub_plen);
+                    let i_lt_n_hidden = k.k.scalar_gt_parallelized(&n_hidden, i as Uint);
+                    binary_if_then_else(k, &i_lt_n_hidden, &mi, &zero)
                 };
 
                 // next_match_target = i + (inclusive ? p.len : 0)
