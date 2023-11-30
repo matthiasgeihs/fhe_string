@@ -246,29 +246,31 @@ impl FheString {
     ) -> FheStringSliceVector {
         /*
         matches = s.find_all_non_overlapping(k, p);
-        n = s.len + 1
+        n = s.len + 2
         next_match = s.len
         let substrings = (0..n).rev().map(|i| {
-            next_match = matches[i] ? i : next_match
+            next_match = matches[i] || p.empty ? i + (inclusive ? p.len : 0) : next_match
             (
-                is_some: i == 0 || matches[i - p.len],
-                start: i,
+                is_some: i == 0 || matches[i - p.len] || p.empty,
+                start: max(i - p.empty, 0),
                 end: next_match,
             )
         })
          */
 
+        let pattern_empty = p.is_empty(k);
         let matches = if reverse {
             self.rfind_all_non_overlapping(k, p)
         } else {
             self.find_all_non_overlapping(k, p)
         };
+
         let p_len = p.len(k);
         let self_len = self.len(k);
 
-        let n = self.max_len() + 1; // Maximum number of entries.
+        let n = self.max_len() + 2; // Maximum number of entries.
         let mut next_match = self_len.clone();
-        let zero = k.create_zero();
+        let one = k.create_one();
         let mut elems = (0..n)
             .rev()
             .map(|i| {
@@ -280,7 +282,8 @@ impl FheString {
                 } else {
                     let i_radix = k.create_value(i as Uint);
                     let i_sub_plen = k.k.sub_parallelized(&i_radix, &p_len);
-                    element_at(k, &matches, &i_sub_plen)
+                    let mi = element_at(k, &matches, &i_sub_plen);
+                    binary_if_then_else(k, &pattern_empty, &one, &mi) // pattern_empty ? mi : 0
                 };
 
                 // next_match_target = i + (inclusive ? p.len : 0)
@@ -291,13 +294,20 @@ impl FheString {
                 };
 
                 // next_match[i] = matches[i] ? next_match_target : next_match[i+1]
-                let matches_i = matches.get(i).unwrap_or(&zero);
+                let matches_i = matches.get(i).unwrap_or(&pattern_empty);
                 next_match = binary_if_then_else(k, matches_i, &next_match_target, &next_match);
+
+                // start = max(i - p.empty, 0)
+                let start = if i > 0 {
+                    k.k.sub_parallelized(&k.create_value(i as Uint), &pattern_empty)
+                } else {
+                    k.create_zero()
+                };
 
                 FheOption {
                     is_some,
                     val: FheStringSlice {
-                        start: k.create_value(i as Uint),
+                        start,
                         end: next_match.clone(),
                     },
                 }
