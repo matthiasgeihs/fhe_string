@@ -259,18 +259,20 @@ impl FheString {
          */
 
         let pattern_empty = p.is_empty(k);
-        let matches = if reverse {
+        let mut matches = if reverse {
             self.rfind_all_non_overlapping(k, p)
         } else {
             self.find_all_non_overlapping(k, p)
         };
+        matches.push(pattern_empty.clone());
+        matches.push(pattern_empty.clone());
 
         let p_len = p.len(k);
         let self_len = self.len(k);
 
         let n = self.max_len() + 2; // Maximum number of entries.
         let mut next_match = self_len.clone();
-        let one = k.create_one();
+        let zero = k.create_zero();
         let mut elems = (0..n)
             .rev()
             .map(|i| {
@@ -282,8 +284,7 @@ impl FheString {
                 } else {
                     let i_radix = k.create_value(i as Uint);
                     let i_sub_plen = k.k.sub_parallelized(&i_radix, &p_len);
-                    let mi = element_at(k, &matches, &i_sub_plen);
-                    binary_if_then_else(k, &pattern_empty, &one, &mi) // pattern_empty ? mi : 0
+                    element_at(k, &matches, &i_sub_plen)
                 };
 
                 // next_match_target = i + (inclusive ? p.len : 0)
@@ -294,7 +295,7 @@ impl FheString {
                 };
 
                 // next_match[i] = matches[i] ? next_match_target : next_match[i+1]
-                let matches_i = matches.get(i).unwrap_or(&pattern_empty);
+                let matches_i = matches.get(i).unwrap_or(&zero);
                 next_match = binary_if_then_else(k, matches_i, &next_match_target, &next_match);
 
                 // start = max(i - p.empty, 0)
