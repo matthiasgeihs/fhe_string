@@ -36,7 +36,7 @@ cargo run --example cmd --release -- --help
 
 ## Development
 
-The following commands can be used for testing and evaluation.
+The following commands can be used for testing and performance evaluation.
 ```bash
 # all tests
 cargo test --release
@@ -51,7 +51,7 @@ RUST_LOG=trace RUST_BACKTRACE=1 cargo test --release "ciphertext::tests::insert:
 cargo test --release -- --test-threads=1 -Z unstable-options --report-time
 ```
 
-The following commands are for generating docs and running doc tests.
+The following commands can be used for generating docs and for running doc tests.
 ```bash
 # generate docs
 cargo doc --no-deps --open
