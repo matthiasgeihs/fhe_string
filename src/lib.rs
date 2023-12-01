@@ -6,15 +6,20 @@
 //! use tfhe::shortint::parameters::PARAM_MESSAGE_2_CARRY_2_KS_PBS;
 //! use fhe_string::{ClientKey, ServerKey, generate_keys, StringEncryption};
 //!
+//! // Generate keys.
 //! let (client_key, server_key) = generate_keys(PARAM_MESSAGE_2_CARRY_2_KS_PBS);
 //!
+//! // Encrypt inputs.
 //! let (input, sep) = ("a,b,c", ",");
 //! let input_enc = input.encrypt(&client_key, Some(8)).unwrap(); // Pad to length 8.
 //! let sep_enc = sep.encrypt(&client_key, None).unwrap(); // No length padding.
 //!
+//! // Compute string function.
 //! let result_enc = input_enc.split(&server_key, &sep_enc);
 //!
-//! assert_eq!(input.split(sep).collect::<Vec<_>>(), result_enc.decrypt(&client_key));
+//! // Decrypt and compare result.
+//! let result_dec = result_enc.decrypt(&client_key);
+//! assert_eq!(input.split(sep).collect::<Vec<_>>(), result_dec);
 //! ```
 
 use std::error::Error;

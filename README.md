@@ -2,18 +2,26 @@
 
 `fhe_string` is a library for computing on encrypted strings using [tfhe-rs](https://github.com/zama-ai/tfhe-rs).
 
+
+The following example shows how the library is used.
 ```rust
 use tfhe::shortint::parameters::PARAM_MESSAGE_2_CARRY_2_KS_PBS;
 use fhe_string::{ClientKey, ServerKey, generate_keys, StringEncryption};
 
+// Generate keys.
 let (client_key, server_key) = generate_keys(PARAM_MESSAGE_2_CARRY_2_KS_PBS);
 
+// Encrypt inputs.
 let (input, sep) = ("a,b,c", ",");
 let input_enc = input.encrypt(&client_key, Some(8)).unwrap(); // Pad to length 8.
 let sep_enc = sep.encrypt(&client_key, None).unwrap(); // No length padding.
 
+// Compute string function.
 let result_enc = input_enc.split(&server_key, &sep_enc);
-assert_eq!(input.split(sep).collect::<Vec<_>>(), result_enc.decrypt(&client_key));
+
+// Decrypt and compare result.
+let result_dec = result_enc.decrypt(&client_key);
+assert_eq!(input.split(sep).collect::<Vec<_>>(), result_dec);
 ```
 
 ## Example `cmd`
@@ -54,9 +62,7 @@ cargo test --doc --release -- --show-output
 
 ## State of this project
 
-This project has been developed as a submission to the [Zama Bounty Program](https://github.com/zama-ai/bounty-program), specifically for the Season 4 bounty ["Create a string library that works on encrypted data using TFHE-rs"](https://github.com/zama-ai/bounty-program/issues/80).
-
-The library is developed under the principle **"everything encrypted first"**. This means that support for operations with encrypted inputs is prioritized over support for operations where parts of the input (e.g., the pattern) is not encrypted, or where the strings are encrypted in a way that leaks their length.
+This library is developed under the principle **"everything encrypted first"**. This means that support for operations with encrypted inputs is prioritized over support for operations where parts of the input (e.g., the pattern) is not encrypted, or where the strings are encrypted in a way that leaks their length.
 
 ### Known limitations
 
@@ -87,3 +93,6 @@ In the following, we outline how a number of string functions could be optimized
 - Everywhere, check that values from `k.create_trivial` are not part of output. (This would leak information to third party.)
   - In particular, in `split.rs`, when creating `FheOption.is_some` and `FheOption.start` for string slices, use proper encryption instead of `create_trivial`.
 - Use public key for encryption.
+
+## Acknowledgements
+This project has been developed for the [Zama Bounty Program](https://github.com/zama-ai/bounty-program), specifically for the bounty ["Create a string library that works on encrypted data using TFHE-rs"](https://github.com/zama-ai/bounty-program/issues/80).
