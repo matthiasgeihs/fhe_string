@@ -24,6 +24,7 @@ impl FheString {
         let self_len = self.len(k);
         let n_mul_self_len = k.k.mul_parallelized(n, &self_len);
         let mut v = (0..l)
+            .into_par_iter()
             .map(|i| {
                 log::trace!("repeat: at index {i}");
 
