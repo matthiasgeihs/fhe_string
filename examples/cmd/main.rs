@@ -1,7 +1,7 @@
 use std::{any::Any, fmt::Debug, ops::Add, time::Instant};
 
 use clap::Parser;
-use fhe_string::{generate_keys, ClientKey, FheOption, FheString, ServerKey};
+use fhe_string::{generate_keys_with_params, ClientKey, FheOption, FheString, ServerKey};
 use tfhe::{integer::RadixCiphertext, shortint::prelude::PARAM_MESSAGE_2_CARRY_2_KS_PBS};
 
 /// Run string operations in the encrypted domain.
@@ -41,7 +41,7 @@ fn main() {
     let n = args.n;
 
     println!("Generating keys...");
-    let (client_key, server_key) = generate_keys(PARAM_MESSAGE_2_CARRY_2_KS_PBS);
+    let (client_key, server_key) = generate_keys_with_params(PARAM_MESSAGE_2_CARRY_2_KS_PBS);
     println!("Done.");
 
     println!("Encrypting input...");

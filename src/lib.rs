@@ -3,28 +3,33 @@
 //! # Example
 //!
 //! ```
-//! use tfhe::shortint::parameters::PARAM_MESSAGE_2_CARRY_2_KS_PBS;
 //! use fhe_string::{ClientKey, ServerKey, generate_keys, StringEncryption};
 //!
 //! // Generate keys.
-//! let (client_key, server_key) = generate_keys(PARAM_MESSAGE_2_CARRY_2_KS_PBS);
+//! let (client_key, server_key) = generate_keys();
 //!
-//! // Encrypt inputs.
+//! // Define inputs and compute cleartext result.
 //! let (input, sep) = ("a,b,c", ",");
-//! let input_enc = input.encrypt(&client_key, Some(8)).unwrap(); // Pad to length 8.
-//! let sep_enc = sep.encrypt(&client_key, None).unwrap(); // No length padding.
+//! let result_clear = input.split(sep).collect::<Vec<_>>();
 //!
-//! // Compute string function.
+//! // Encrypt inputs (without padding).
+//! let input_enc = input.encrypt(&client_key, None).unwrap();
+//! let sep_enc = sep.encrypt(&client_key, None).unwrap();
+//!
+//! // Compute `split` on encrypted inputs.
 //! let result_enc = input_enc.split(&server_key, &sep_enc);
 //!
 //! // Decrypt and compare result.
 //! let result_dec = result_enc.decrypt(&client_key);
-//! assert_eq!(input.split(sep).collect::<Vec<_>>(), result_dec);
+//! assert_eq!(result_dec, result_clear);
 //! ```
 
 use std::error::Error;
 
-use tfhe::{integer::gen_keys_radix, shortint::ClassicPBSParameters};
+use tfhe::{
+    integer::gen_keys_radix,
+    shortint::{parameters::PARAM_MESSAGE_2_CARRY_2_KS_PBS, ClassicPBSParameters},
+};
 
 pub use ciphertext::{split::FheStringSliceVector, FheAsciiChar, FheOption, FheString};
 pub use client_key::ClientKey;
@@ -36,7 +41,13 @@ mod server_key;
 
 /// Generates a fresh key pair for handling encrypted strings up to length
 /// `2^8-1`.
-pub fn generate_keys(params: ClassicPBSParameters) -> (ClientKey, ServerKey) {
+pub fn generate_keys() -> (ClientKey, ServerKey) {
+    generate_keys_with_params(PARAM_MESSAGE_2_CARRY_2_KS_PBS)
+}
+
+/// Generates a fresh key pair for handling encrypted strings up to length
+/// `2^8-1`, using the given encryption scheme parameters.
+pub fn generate_keys_with_params(params: ClassicPBSParameters) -> (ClientKey, ServerKey) {
     let ascii_bitlen = 8;
     let msg_mod = params.message_modulus.0;
     let num_blocks = ascii_bitlen / msg_mod.ilog2() as usize;

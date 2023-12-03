@@ -1,6 +1,6 @@
 use tfhe::{integer::RadixCiphertext, shortint::prelude::PARAM_MESSAGE_2_CARRY_2_KS_PBS};
 
-use crate::{client_key::ClientKey, generate_keys, server_key::ServerKey};
+use crate::{client_key::ClientKey, generate_keys_with_params, server_key::ServerKey};
 
 use super::{FheOption, FheString};
 
@@ -14,7 +14,7 @@ mod trim;
 
 fn setup() -> (ClientKey, ServerKey) {
     let _ = env_logger::try_init(); // Ignore error if already initialized.
-    generate_keys(PARAM_MESSAGE_2_CARRY_2_KS_PBS)
+    generate_keys_with_params(PARAM_MESSAGE_2_CARRY_2_KS_PBS)
 }
 
 fn encrypt_string(k: &ClientKey, s: &str, l: Option<usize>) -> FheString {

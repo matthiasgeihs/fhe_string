@@ -5,11 +5,10 @@
 ## API primer
 The following code snippet demonstrates usage of the API.
 ```rust
-use tfhe::shortint::parameters::PARAM_MESSAGE_2_CARRY_2_KS_PBS;
 use fhe_string::{ClientKey, ServerKey, generate_keys, StringEncryption};
 
 // Generate keys.
-let (client_key, server_key) = generate_keys(PARAM_MESSAGE_2_CARRY_2_KS_PBS);
+let (client_key, server_key) = generate_keys();
 
 // Define inputs and compute cleartext result.
 let (input, sep) = ("a,b,c", ",");
@@ -39,7 +38,15 @@ cargo run --example cmd --release -- --help
 
 ## Development
 
-The following commands can be used for testing and performance evaluation.
+In the following we list commands useful during development.
+
+### Linting
+```bash
+cargo fmt
+cargo clippy
+```
+
+### Testing and performance evaluation
 ```bash
 # all tests
 cargo test --release
@@ -54,7 +61,7 @@ RUST_LOG=trace RUST_BACKTRACE=1 cargo test --release "ciphertext::tests::insert:
 cargo test --release -- --test-threads=1 -Z unstable-options --report-time
 ```
 
-The following commands can be used for generating docs and for running doc tests.
+### Docs generation and running doc tests
 ```bash
 # generate docs
 cargo doc --no-deps --open
@@ -90,8 +97,8 @@ In the following we list some aspects in which our implementation deviates from 
 
 ### Potential optimizations
 
-Currently, all encrypted strings are padded using encryptions of 0 to hide their length.
-In the following, we outline how a number of string functions could be optimized if we decide to add support for unpadded encrypted strings in the future.
+Currently, 0-padding of encrypted strings is mandatory.
+In the following, we outline a number of potential optimizations that could be applied if support for unpadded encrypted strings is added in the future.
 
 - `ends_with`: currently need to go through whole string because we don't know
   length. then only need to compare the respective ends of the two encrypted
