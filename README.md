@@ -11,17 +11,19 @@ use fhe_string::{ClientKey, ServerKey, generate_keys, StringEncryption};
 // Generate keys.
 let (client_key, server_key) = generate_keys(PARAM_MESSAGE_2_CARRY_2_KS_PBS);
 
-// Encrypt inputs.
+// Define inputs and compute cleartext result.
 let (input, sep) = ("a,b,c", ",");
-let input_enc = input.encrypt(&client_key, Some(8)).unwrap(); // Pad to length 8.
-let sep_enc = sep.encrypt(&client_key, None).unwrap(); // No length padding.
+let result_clear = input.split(sep).collect::<Vec<_>>();
 
-// Compute string function.
+// Encrypt inputs (without padding).
+let input_enc = input.encrypt(&client_key, None).unwrap();
+let sep_enc = sep.encrypt(&client_key, None).unwrap();
+
+// Compute `split` on encrypted inputs.
 let result_enc = input_enc.split(&server_key, &sep_enc);
 
 // Decrypt and compare result.
 let result_dec = result_enc.decrypt(&client_key);
-let result_clear = input.split(sep).collect::<Vec<_>>();
 assert_eq!(result_dec, result_clear);
 ```
 
