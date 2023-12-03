@@ -62,21 +62,24 @@ cargo test --doc --release -- --show-output
 
 ## State of this project
 
-This library is developed under the principle **"everything encrypted first"**. This means that support for operations with encrypted inputs is prioritized over support for operations where parts of the input (e.g., the pattern) is not encrypted, or where the strings are encrypted in a way that leaks their length.
+This project has been developed for the [Zama Bounty Program](https://github.com/zama-ai/bounty-program), specifically for the bounty ["Create a string library that works on encrypted data using TFHE-rs"](https://github.com/zama-ai/bounty-program/issues/80).
 
-### Known limitations
+### Deviations from bounty description
+
+We chose to develop this library under the principle **"everything encrypted first"**. This means that support for operations with encrypted inputs has been prioritized over support for operations where parts of the input (e.g., the pattern) is not encrypted, or where the strings are encrypted in a way that leaks their length.
+In the following we list some aspects in which our implementation deviates from the bounty description.
 
 - *No cleartext API:* Due to time constraints and because of the encryption-first principle mentioned above, a dedicated cleartext API, where parts of the input are provided in cleartext, has not been implemented. However, these operations can obviously be emulated, albeit at lower performance in some cases, by encrypting the cleartext inputs and then calling the ciphertext API.
 
-- *No optimizations for unpadded strings:* The original bounty description stated that all strings should be 0-padded. Later, this requirement was relaxed (see note in [bounty description](https://github.com/zama-ai/bounty-program/issues/80)) to allow for unpadded strings that are indentifiable as such without decryption. Due to time constraints and the principle mentioned above, we did not add this feature yet.
+- *No optimizations for unpadded strings:* The original bounty description stated that all strings should be 0-padded. Later, this requirement was relaxed (see note in [bounty description](https://github.com/zama-ai/bounty-program/issues/80)) to allow for unpadded strings that are indentifiable as such without decryption. Due to time constraints, unpadded strings, or any optimizations in that regard, are currently not implemented. However, we do list potential optimizations further below.
 
-- *String functions are implemented on `FheString` instead of `ServerKey`:* The bounty description asks for the string functions to be implemented on the server key type. However, we found it to be more intuitive to have the functions on the `FheString` type, similar to how regular string functions are available on their string type. (Obviously, this can easily be changed on request.)
+- *String functions implemented on `FheString` instead of `ServerKey`:* The bounty description asks for the string functions to be implemented on the server key type. However, we found it to be more intuitive to have the functions on the `FheString` type, similar to how regular string functions are available on their string type. (Obviously, this can easily be changed on request.)
 
-- *Code is provided as a standalone library instead of as a `tfhe-rs` example:* The bounty description asks for the code be provided as an example that is part of the `tfhe-rs` codebase. However, we found that compilation times were much longer when compiling the code in form of an example compared compiling it as a standalone library. As this was limiting code iteration time, we decided to develop and provide the code in form of a standalone library. (Obviously, this can easily be changed on request.)
+- *Standalone library instead of `tfhe-rs` example:* The bounty description asks for the code be provided as an example that is part of the `tfhe-rs` codebase. However, we found that compilation times were much longer when compiling the code in form of an example compared compiling it as a standalone library. As this was limiting code iteration time, we decided to develop and provide the code in form of a standalone library. (Obviously, this can easily be changed on request.)
 
 - *Restricted to strings of length < 256:* Currently, the library does not support encrypted strings longer than 255 characters. This is due to the fact that for our `FheString` algorithms to work, we need to be able to represent encrypted integers up to the maximum string length. The size of encrypted integers is fixed at key generation. We could have opted for supporting longer strings (in fact, this is an easy change to the key generation function), but we felt that 256 characters is more than enough initially, considering the limited performance.
 
-### Possible optimizations if unpadded strings are available
+### Potential optimizations
 
 Currently, all encrypted strings are padded using encryptions of 0 to hide their length.
 In the following, we outline how a number of string functions could be optimized if we decide to add support for unpadded encrypted strings in the future.
@@ -86,13 +89,3 @@ In the following, we outline how a number of string functions could be optimized
   strings.
 - `add`, `repeat`: currently this is a quadratic operation because we don't know
   where the boundaries are. if we don't have padding, we can just append.
-
-### TODO
-- Remove "TODO" section before submission
-- Work on any of the known limitations? (e.g., add support for cleartext pattern, unpadded strings)
-- Everywhere, check that values from `k.create_trivial` are not part of output. (This would leak information to third party.)
-  - In particular, in `split.rs`, when creating `FheOption.is_some` and `FheOption.start` for string slices, use proper encryption instead of `create_trivial`.
-- Use public key for encryption.
-
-## Acknowledgements
-This project has been developed for the [Zama Bounty Program](https://github.com/zama-ai/bounty-program), specifically for the bounty ["Create a string library that works on encrypted data using TFHE-rs"](https://github.com/zama-ai/bounty-program/issues/80).
