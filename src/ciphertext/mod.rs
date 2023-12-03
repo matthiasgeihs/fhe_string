@@ -62,7 +62,7 @@ impl FheString {
         }
 
         // Encrypt characters.
-        let mut fhe_chars = s
+        let mut chars = s
             .chars()
             .map(|c| {
                 let ct = k.0.encrypt(c as u8);
@@ -73,18 +73,46 @@ impl FheString {
         // Append terminating character.
         let term = k.0.encrypt(Self::TERMINATOR);
         let term = FheAsciiChar(term);
-        fhe_chars.push(term);
+        chars.push(term);
 
         // Optional: Pad to length.
         if let Some(l) = l {
-            (0..l + 1 - fhe_chars.len()).for_each(|_| {
+            (0..l + 1 - chars.len()).for_each(|_| {
                 let term = k.0.encrypt(Self::TERMINATOR);
                 let term = FheAsciiChar(term);
-                fhe_chars.push(term.clone())
+                chars.push(term.clone())
             });
         }
 
-        Ok(FheString(fhe_chars))
+        Ok(FheString(chars))
+    }
+
+    /// Similar to `FheString::new`, but only creates a trivial encryption that
+    /// does not actually hide the plaintext.
+    pub fn new_trivial(k: &ServerKey, s: &str) -> Result<Self, Box<dyn Error>> {
+        if !s.is_ascii() {
+            return Err("string is not ascii".into());
+        } else if s.chars().any(|x| x as Uint == Self::TERMINATOR) {
+            return Err("string contains terminator character".into());
+        } else if s.len() > Self::max_len_with_key(k) {
+            return Err("string length exceeds maximum length".into());
+        }
+
+        // Trivial-encrypt characters.
+        let mut chars = s
+            .chars()
+            .map(|c| {
+                let ct = k.create_value(c as u8);
+                FheAsciiChar(ct)
+            })
+            .collect::<Vec<_>>();
+
+        // Append terminating character.
+        let term = k.create_value(Self::TERMINATOR);
+        let term = FheAsciiChar(term);
+        chars.push(term);
+
+        Ok(FheString(chars))
     }
 
     pub fn decrypt(&self, k: &ClientKey) -> String {
@@ -201,7 +229,7 @@ impl FheString {
 
                 // i == j ? a[j] : 0
                 let i_eq_j = k.k.scalar_eq_parallelized(i, j as Uint);
-                
+
                 k.k.mul_parallelized(&i_eq_j, &aj.0)
             })
             .collect::<Vec<_>>();
@@ -245,7 +273,7 @@ pub fn element_at(k: &ServerKey, v: &[RadixCiphertext], i: &RadixCiphertext) -> 
 
             // i == j ? a[j] : 0
             let i_eq_j = k.k.scalar_eq_parallelized(i, j as Uint);
-            
+
             k.k.mul_parallelized(&i_eq_j, aj)
         })
         .collect::<Vec<_>>();
