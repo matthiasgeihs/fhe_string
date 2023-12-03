@@ -76,7 +76,7 @@ impl FheString {
                             .into_par_iter()
                             .map(|i| {
                                 let i_radix = k.create_value(i as Uint);
-                                let i_sub_index = k.k.sub_parallelized(&i_radix, &index);
+                                let i_sub_index = k.k.sub_parallelized(&i_radix, index);
                                 b.char_at(k, &i_sub_index)
                             })
                             .collect::<Vec<_>>()

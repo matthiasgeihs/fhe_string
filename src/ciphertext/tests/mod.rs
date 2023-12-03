@@ -34,7 +34,7 @@ fn int_to_bool(x: u64) -> bool {
 }
 
 fn decrypt_bool(k: &ClientKey, b: &RadixCiphertext) -> bool {
-    let x = k.0.decrypt::<u64>(&b);
+    let x = k.0.decrypt::<u64>(b);
     int_to_bool(x)
 }
 

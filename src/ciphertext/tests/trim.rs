@@ -122,7 +122,7 @@ fn strip_prefix_strip_suffix() {
         let b_enc = encrypt_string(&client_key, t.b, t.b_pad);
 
         // strip_prefix
-        let result = t.a.strip_prefix(t.b).and_then(|s| Some(s.to_string()));
+        let result = t.a.strip_prefix(t.b).map(|s| s.to_string());
 
         let result_enc = a_enc.strip_prefix(&server_key, &b_enc);
         let result_dec = decrypt_option_string(&client_key, &result_enc);
@@ -134,7 +134,7 @@ fn strip_prefix_strip_suffix() {
         assert_eq!(result, result_dec);
 
         // strip_suffix
-        let result = t.a.strip_suffix(t.b).and_then(|s| Some(s.to_string()));
+        let result = t.a.strip_suffix(t.b).map(|s| s.to_string());
 
         let result_enc = a_enc.strip_suffix(&server_key, &b_enc);
         let result_dec = decrypt_option_string(&client_key, &result_enc);

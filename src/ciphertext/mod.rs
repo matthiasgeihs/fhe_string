@@ -49,7 +49,7 @@ impl FheString {
     pub fn new(k: &ClientKey, s: &str, l: Option<usize>) -> Result<Self, Box<dyn Error>> {
         if !s.is_ascii() {
             return Err("string is not ascii".into());
-        } else if s.chars().find(|&x| x as Uint == Self::TERMINATOR).is_some() {
+        } else if s.chars().any(|x| x as Uint == Self::TERMINATOR) {
             return Err("string contains terminator character".into());
         } else if s.len() > Self::max_len_with_key(k) {
             return Err("string length exceeds maximum length".into());
@@ -201,8 +201,8 @@ impl FheString {
 
                 // i == j ? a[j] : 0
                 let i_eq_j = k.k.scalar_eq_parallelized(i, j as Uint);
-                let i_eq_j_mul_aj = k.k.mul_parallelized(&i_eq_j, &aj.0);
-                i_eq_j_mul_aj
+                
+                k.k.mul_parallelized(&i_eq_j, &aj.0)
             })
             .collect::<Vec<_>>();
 
@@ -245,8 +245,8 @@ pub fn element_at(k: &ServerKey, v: &[RadixCiphertext], i: &RadixCiphertext) -> 
 
             // i == j ? a[j] : 0
             let i_eq_j = k.k.scalar_eq_parallelized(i, j as Uint);
-            let i_eq_j_mul_aj = k.k.mul_parallelized(&i_eq_j, &aj);
-            i_eq_j_mul_aj
+            
+            k.k.mul_parallelized(&i_eq_j, aj)
         })
         .collect::<Vec<_>>();
 
@@ -308,7 +308,7 @@ fn index_of_unchecked_with_options<T: Sync>(
         index = binary_if_then_else(k, &b, &index, &pi_mul_i);
 
         // b = b || pi
-        b = binary_or(&k, &b, &pi);
+        b = binary_or(k, &b, &pi);
     });
 
     FheOption {
@@ -328,7 +328,7 @@ pub struct FheOption<T> {
 impl FheOption<RadixCiphertext> {
     pub fn decrypt(&self, k: &ClientKey) -> Option<Uint> {
         let is_some = k.decrypt::<Uint>(&self.is_some);
-        match u64::from(is_some) {
+        match is_some {
             0 => None,
             1 => {
                 let val = k.decrypt::<Uint>(&self.val);
@@ -342,7 +342,7 @@ impl FheOption<RadixCiphertext> {
 impl FheOption<FheString> {
     pub fn decrypt(&self, k: &ClientKey) -> Option<String> {
         let is_some = k.decrypt::<Uint>(&self.is_some);
-        match u64::from(is_some) {
+        match is_some {
             0 => None,
             1 => {
                 let val = self.val.decrypt(k);

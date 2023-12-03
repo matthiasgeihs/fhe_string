@@ -102,7 +102,7 @@ impl FheStringSliceVector {
             .iter()
             .map(|vi| {
                 // is_some = n < i ? vi.is_some : 0
-                let n_lt_i = k.k.lt_parallelized(&n, &i);
+                let n_lt_i = k.k.lt_parallelized(&n, i);
                 let is_some = binary_if_then_else(k, &n_lt_i, &vi.is_some, &zero);
 
                 // n += v[i].is_some

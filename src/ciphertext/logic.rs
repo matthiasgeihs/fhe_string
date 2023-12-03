@@ -10,7 +10,7 @@ use super::Uint;
 pub fn binary_not(k: &ServerKey, a: &RadixCiphertext) -> RadixCiphertext {
     // 1 - a
     let one = k.create_one();
-    k.k.sub_parallelized(&one, &a)
+    k.k.sub_parallelized(&one, a)
 }
 
 // Returns `a or b`, assuming `a` and `b` are encryptions of binary values.

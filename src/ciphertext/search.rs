@@ -179,7 +179,7 @@ impl FheString {
     ) -> FheOption<RadixCiphertext> {
         // Search substring.
         let subvec = &self.0.get(i..).unwrap_or_default();
-        let index = index_of_unchecked(k, &subvec, p);
+        let index = index_of_unchecked(k, subvec, p);
         // Add offset.
         let val = k.k.scalar_add_parallelized(&index.val, i as Uint);
         FheOption {

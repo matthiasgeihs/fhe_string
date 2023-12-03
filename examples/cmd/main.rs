@@ -63,7 +63,7 @@ fn main() {
     let args = TestCaseInput {
         client_key,
         server_key,
-        input: input,
+        input,
         input_enc,
         n,
         n_enc,
@@ -573,7 +573,7 @@ struct TestCase {
 }
 
 fn decrypt_bool(k: &ClientKey, b: &RadixCiphertext) -> bool {
-    let x = k.decrypt::<u64>(&b);
+    let x = k.decrypt::<u64>(b);
     int_to_bool(x)
 }
 

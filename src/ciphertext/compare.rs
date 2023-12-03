@@ -48,7 +48,7 @@ impl FheString {
     /// Returns `self <= s`. The result is an encryption of 1 if this is the
     /// case and an encryption of 0 otherwise.
     pub fn le(&self, k: &ServerKey, s: &FheString) -> RadixCiphertext {
-        let s_lt_self = s.lt(k, &self);
+        let s_lt_self = s.lt(k, self);
         binary_not(k, &s_lt_self)
     }
 
@@ -86,7 +86,7 @@ impl FheString {
             is_lt = binary_or(k, &is_lt, &ai_lt_bi_and_eq);
 
             // is_eq = is_eq && ai == bi
-            is_eq = k.k.mul_parallelized(&is_eq, &ai_eq_bi);
+            is_eq = k.k.mul_parallelized(&is_eq, ai_eq_bi);
         });
         is_lt
     }
@@ -94,13 +94,13 @@ impl FheString {
     /// Returns `self >= s`. The result is an encryption of 1 if this is the
     /// case and an encryption of 0 otherwise.
     pub fn ge(&self, k: &ServerKey, s: &FheString) -> RadixCiphertext {
-        s.le(k, &self)
+        s.le(k, self)
     }
 
     /// Returns `self > s`. The result is an encryption of 1 if this is the
     /// case and an encryption of 0 otherwise.
     pub fn gt(&self, k: &ServerKey, s: &FheString) -> RadixCiphertext {
-        s.lt(k, &self)
+        s.lt(k, self)
     }
 
     /// Returns whether `self` and `s` are equal when ignoring case. The result
