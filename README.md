@@ -1,9 +1,9 @@
 # fhe_string
 
-`fhe_string` is a library for computing on encrypted strings using [tfhe-rs](https://github.com/zama-ai/tfhe-rs).
+`fhe_string` is a library for computing on encrypted strings.
 
-
-The following example shows how the library is used.
+## API primer
+The following code snippet demonstrates usage of the API.
 ```rust
 use tfhe::shortint::parameters::PARAM_MESSAGE_2_CARRY_2_KS_PBS;
 use fhe_string::{ClientKey, ServerKey, generate_keys, StringEncryption};
@@ -21,7 +21,8 @@ let result_enc = input_enc.split(&server_key, &sep_enc);
 
 // Decrypt and compare result.
 let result_dec = result_enc.decrypt(&client_key);
-assert_eq!(input.split(sep).collect::<Vec<_>>(), result_dec);
+let result_clear = input.split(sep).collect::<Vec<_>>();
+assert_eq!(result_dec, result_clear);
 ```
 
 ## Example `cmd`
@@ -69,13 +70,19 @@ This project has been developed for the [Zama Bounty Program](https://github.com
 We chose to develop this library under the principle **"everything encrypted first"**. This means that support for operations with encrypted inputs has been prioritized over support for operations where parts of the input (e.g., the pattern) is not encrypted, or where the strings are encrypted in a way that leaks their length.
 In the following we list some aspects in which our implementation deviates from the bounty description.
 
-- *No cleartext API:* Due to time constraints and because of the encryption-first principle mentioned above, a dedicated cleartext API, where parts of the input are provided in cleartext, has not been implemented. However, these operations can obviously be emulated, albeit at lower performance in some cases, by encrypting the cleartext inputs and then calling the ciphertext API.
+#### Unencrypted input
 
 - *No optimizations for unpadded strings:* The original bounty description stated that all strings should be 0-padded. Later, this requirement was relaxed (see note in [bounty description](https://github.com/zama-ai/bounty-program/issues/80)) to allow for unpadded strings that are indentifiable as such without decryption. Due to time constraints, unpadded strings, or any optimizations in that regard, are currently not implemented. However, we do list potential optimizations further below.
+
+- *No optimizations for partial cleartext input:* We did not implement a dedicated cleartext API or any optimizations for it. We support these operations by first encrypting the cleartext inputs and then calling the corresponding ciphertext API.
+
+#### Project structure
 
 - *String functions implemented on `FheString` instead of `ServerKey`:* The bounty description asks for the string functions to be implemented on the server key type. However, we found it to be more intuitive to have the functions on the `FheString` type, similar to how regular string functions are available on their string type. (Obviously, this can easily be changed on request.)
 
 - *Standalone library instead of `tfhe-rs` example:* The bounty description asks for the code be provided as an example that is part of the `tfhe-rs` codebase. However, we found that compilation times were much longer when compiling the code in form of an example compared compiling it as a standalone library. As this was limiting code iteration time, we decided to develop and provide the code in form of a standalone library. (Obviously, this can easily be changed on request.)
+
+#### String length
 
 - *Restricted to strings of length < 256:* Currently, the library does not support encrypted strings longer than 255 characters. This is due to the fact that for our `FheString` algorithms to work, we need to be able to represent encrypted integers up to the maximum string length. The size of encrypted integers is fixed at key generation. We could have opted for supporting longer strings (in fact, this is an easy change to the key generation function), but we felt that 256 characters is more than enough initially, considering the limited performance.
 
