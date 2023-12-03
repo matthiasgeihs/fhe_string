@@ -10,7 +10,7 @@ use fhe_string::{ClientKey, ServerKey, generate_keys, StringEncryption};
 // Generate keys.
 let (client_key, server_key) = generate_keys();
 
-// Define inputs and compute cleartext result.
+// Define inputs and compute `split` on cleartext.
 let (input, sep) = ("a,b,c", ",");
 let result_clear = input.split(sep).collect::<Vec<_>>();
 
@@ -18,7 +18,7 @@ let result_clear = input.split(sep).collect::<Vec<_>>();
 let input_enc = input.encrypt(&client_key, None).unwrap();
 let sep_enc = sep.encrypt(&client_key, None).unwrap();
 
-// Compute `split` on encrypted inputs.
+// Compute `split` on encrypted string and pattern.
 let result_enc = input_enc.split(&server_key, &sep_enc);
 
 // Decrypt and compare result.
