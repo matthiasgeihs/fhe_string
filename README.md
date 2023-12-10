@@ -79,7 +79,7 @@ This project has been developed for the [Zama Bounty Program](https://github.com
 We chose to develop this library under the principle **"everything encrypted first"**. This means that support for operations with encrypted inputs has been prioritized over support for operations where parts of the input (e.g., the pattern) is not encrypted, or where the strings are encrypted in a way that leaks their length.
 In the following we list some aspects in which our implementation deviates from the bounty description.
 
-#### Unencrypted input
+#### Cleartext input
 
 - *No optimizations for unpadded strings:* The original bounty description stated that all strings should be 0-padded. Later, this requirement was relaxed (see note in [bounty description](https://github.com/zama-ai/bounty-program/issues/80)) to allow for unpadded strings that are indentifiable as such without decryption. Due to time constraints, unpadded strings, or any optimizations in that regard, are currently not implemented. However, we do list potential optimizations further below.
 
@@ -97,7 +97,7 @@ In the following we list some aspects in which our implementation deviates from 
 
 ### Potential optimizations
 
-Currently, 0-padding of encrypted strings is mandatory.
+Currently, all encrypted strings are 0-padded.
 In the following, we outline a number of potential optimizations that could be applied if support for unpadded encrypted strings is added in the future.
 
 - `ends_with`: currently need to go through whole string because we don't know
