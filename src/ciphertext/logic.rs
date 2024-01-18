@@ -57,9 +57,5 @@ pub fn binary_if_then_else(
     b: &RadixCiphertext,
     c: &RadixCiphertext,
 ) -> RadixCiphertext {
-    // a * b + (1 - a) * c
-    let a_mul_b = k.k.mul_parallelized(a, b);
-    let not_a = binary_not(k, a);
-    let not_a_mul_c = k.k.mul_parallelized(&not_a, c);
-    k.k.add_parallelized(&a_mul_b, &not_a_mul_c)
+    k.k.if_then_else_parallelized(a, b, c)
 }
