@@ -86,7 +86,7 @@ impl FheString {
             is_lt = binary_or(k, &is_lt, &ai_lt_bi_and_eq);
 
             // is_eq = is_eq && ai == bi
-            is_eq = k.k.mul_parallelized(&is_eq, ai_eq_bi);
+            is_eq = binary_and(k, &is_eq, ai_eq_bi);
         });
         is_lt
     }
