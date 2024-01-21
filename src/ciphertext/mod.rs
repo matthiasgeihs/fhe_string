@@ -252,6 +252,9 @@ impl FheString {
     fn pad(&self, k: &ServerKey, l: usize) -> Self {
         if l > Self::max_len_with_key(k) {
             panic!("pad length exceeds maximum length")
+        } else if l < self.max_len() {
+            // Nothing to pad.
+            return self.clone();
         }
 
         let mut v = self.0.to_vec();
