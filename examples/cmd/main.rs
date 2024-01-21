@@ -504,6 +504,7 @@ fn main() {
         },
     ];
 
+    let start = Instant::now();
     test_cases.iter().for_each(|t| {
         let start = Instant::now();
         let result_std = (t.std)(&args);
@@ -525,6 +526,8 @@ fn main() {
             }
         )
     });
+    let duration = start.elapsed();
+    println!("\nDuration (total): {:?}", duration);
 }
 
 trait TestCaseOutput: Debug {
