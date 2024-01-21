@@ -3,7 +3,7 @@
 use std::cmp;
 
 use rayon::{join, prelude::*};
-use tfhe::integer::RadixCiphertext;
+use tfhe::integer::{IntegerCiphertext, RadixCiphertext};
 
 use crate::server_key::ServerKey;
 
@@ -28,14 +28,13 @@ impl FheString {
         let a = self.pad(k, l);
         let b = s.pad(k, l);
 
-        // is_eq[i] = a[i] == b[i]
-        let is_eq =
-            a.0.par_iter()
-                .zip(b.0)
-                .map(|(ai, bi)| k.k.eq_parallelized(&ai.0, &bi.0))
-                .collect::<Vec<_>>();
+        // Convert strings to radix integers and rely on optimized comparison.
+        let radix_a = a.to_long_radix();
+        let radix_b = b.to_long_radix();
+        let c = k.k.eq_parallelized(&radix_a, &radix_b);
 
-        binary_and_vec(k, &is_eq)
+        // Trim exceeding radix blocks to ensure compatibility.
+        k.k.trim_radix_blocks_msb(&c, c.blocks().len() - k.num_blocks)
     }
 
     /// Returns `self != s`. The result is an encryption of 1 if this is the
@@ -143,8 +142,19 @@ impl FheString {
         FheString(v.to_vec())
     }
 
+    // Returns the empty string.
     fn empty_string(k: &ServerKey) -> Self {
         let term = FheAsciiChar(k.create_value(Self::TERMINATOR));
         FheString(vec![term])
+    }
+
+    // Converts the string into a long radix by concatenating its blocks.
+    fn to_long_radix(&self) -> RadixCiphertext {
+        let blocks: Vec<_> = self
+            .0
+            .iter()
+            .flat_map(|c| c.0.blocks().to_owned())
+            .collect();
+        RadixCiphertext::from_blocks(blocks)
     }
 }
