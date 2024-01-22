@@ -258,10 +258,14 @@ impl FheString {
         }
 
         let mut v = self.0.to_vec();
-        let term = FheAsciiChar(k.create_value(Self::TERMINATOR));
+        let term = Self::term_char(k);
         // l + 1 because of termination character.
         (0..l + 1 - self.0.len()).for_each(|_| v.push(term.clone()));
         FheString(v)
+    }
+
+    fn term_char(k: &ServerKey) -> FheAsciiChar {
+        FheAsciiChar(k.create_value(Self::TERMINATOR))
     }
 }
 

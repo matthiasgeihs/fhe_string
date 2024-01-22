@@ -9,7 +9,7 @@ use crate::server_key::ServerKey;
 
 use super::{
     logic::{binary_and, binary_and_vec, binary_not, binary_or},
-    FheAsciiChar, FheString,
+    FheString,
 };
 
 impl FheString {
@@ -23,18 +23,32 @@ impl FheString {
     /// Returns `self == s`. The result is an encryption of 1 if this is the
     /// case and an encryption of 0 otherwise.
     pub fn eq(&self, k: &ServerKey, s: &FheString) -> RadixCiphertext {
-        // Pad to same length.
-        let l = cmp::max(self.max_len(), s.max_len());
-        let a = self.pad(k, l);
-        let b = s.pad(k, l);
+        // Compare overlapping part.
+        let l = cmp::min(self.max_len(), s.max_len());
+        let a = self.substr_clear(k, 0, l);
+        let b = s.substr_clear(k, 0, l);
 
-        // Convert strings to radix integers and rely on optimized comparison.
-        let radix_a = a.to_long_radix();
-        let radix_b = b.to_long_radix();
-        let c = k.k.eq_parallelized(&radix_a, &radix_b);
+        let (overlap_eq, overhang_empty) = join(
+            || {
+                // Convert strings to radix integers and rely on optimized comparison.
+                let radix_a = a.to_long_radix();
+                let radix_b = b.to_long_radix();
+                let eq = k.k.eq_parallelized(&radix_a, &radix_b);
 
-        // Trim exceeding radix blocks to ensure compatibility.
-        k.k.trim_radix_blocks_msb(&c, c.blocks().len() - k.num_blocks)
+                // Trim exceeding radix blocks to ensure compatibility.
+                k.k.trim_radix_blocks_msb(&eq, eq.blocks().len() - k.num_blocks)
+            },
+            || {
+                // Ensure that overhang is empty.
+                match self.max_len().cmp(&s.max_len()) {
+                    cmp::Ordering::Greater => self.substr_clear(k, l, self.max_len()).is_empty(k),
+                    cmp::Ordering::Less => s.substr_clear(k, l, s.max_len()).is_empty(k),
+                    cmp::Ordering::Equal => k.create_one(),
+                }
+            },
+        );
+
+        binary_and(k, &overlap_eq, &overhang_empty)
     }
 
     /// Returns `self != s`. The result is an encryption of 1 if this is the
@@ -130,7 +144,7 @@ impl FheString {
         // Extract substring.
         let b = s;
         let b_len = b.len(k);
-        let a = self.substr_clear(k, i);
+        let a = self.substr_clear(k, i, self.max_len());
         let a = a.truncate(k, &b_len);
         a.eq(k, b)
     }
@@ -142,10 +156,13 @@ impl FheString {
         FheString(v.to_vec())
     }
 
-    // Returns the empty string.
-    fn empty_string(k: &ServerKey) -> Self {
-        let term = FheAsciiChar(k.create_value(Self::TERMINATOR));
-        FheString(vec![term])
+    /// Returns `self[start..end]`. If `start >= self.len`, returns the empty
+    /// string. If `end > self.max_len`, set `end = self.max_len`.
+    fn substr_clear(&self, k: &ServerKey, start: usize, end: usize) -> FheString {
+        let end = cmp::min(self.max_len(), end);
+        let mut v = self.0.get(start..end).unwrap_or_default().to_vec();
+        v.push(FheString::term_char(k));
+        FheString(v.to_vec())
     }
 
     // Converts the string into a long radix by concatenating its blocks.
