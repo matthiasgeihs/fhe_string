@@ -1,6 +1,6 @@
 //! Functionality for string search.
 
-use rayon::prelude::*;
+use rayon::{join, prelude::*};
 use tfhe::integer::RadixCiphertext;
 
 use crate::{
@@ -223,8 +223,7 @@ impl FheString {
         let opti = self.rfind(k, s);
 
         // is_end = self.len == i + s.len
-        let self_len = self.len(k);
-        let s_len = s.len(k);
+        let (self_len, s_len) = join(|| self.len(k), || s.len(k));
         let i_add_s_len = k.k.add_parallelized(&opti.val, &s_len);
         let is_end = k.k.eq_parallelized(&self_len, &i_add_s_len);
 

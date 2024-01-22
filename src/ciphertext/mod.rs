@@ -332,14 +332,20 @@ fn index_of_unchecked_with_options<T: Sync>(
     };
 
     // Evaluate predicate `p` on each element of `v`.
-    let p_eval: Vec<_> = items.par_iter().map(|(i, x)| (i, p(k, x))).collect();
+    let p_eval: Vec<_> = items
+        .par_iter()
+        .map(|(i, x)| {
+            let pi = p(k, x);
+            let pi_mul_i = k.k.scalar_mul_parallelized(&pi, *i as Uint);
+            (i, pi, pi_mul_i)
+        })
+        .collect();
 
     // Find first index for which predicate evaluated to 1.
-    p_eval.into_iter().for_each(|(i, pi)| {
+    p_eval.into_iter().for_each(|(i, pi, pi_mul_i)| {
         log::trace!("index_of_opt_unchecked: at index {i}");
 
         // index = b ? index : (pi ? i : 0)
-        let pi_mul_i = k.k.scalar_mul_parallelized(&pi, *i as Uint);
         index = binary_if_then_else(k, &b, &index, &pi_mul_i);
 
         // b = b || pi
