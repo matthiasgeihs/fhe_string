@@ -136,8 +136,8 @@ impl FheString {
                 log::trace!("len: at index {i_sub_1}");
                 let self_isub1 = &pair[0];
                 let self_i = &pair[1];
-                let self_isub1_neq_0 = k.k.scalar_ne_parallelized(&self_isub1.0, 0);
-                let self_i_eq_0 = k.k.scalar_eq_parallelized(&self_i.0, 0);
+                let self_isub1_neq_0 = k.k.scalar_ne_parallelized(&self_isub1.0, Self::TERMINATOR);
+                let self_i_eq_0 = k.k.scalar_eq_parallelized(&self_i.0, Self::TERMINATOR);
                 let b = binary_and(k, &self_isub1_neq_0, &self_i_eq_0);
                 let i = i_sub_1 + 1;
                 k.k.scalar_mul_parallelized(&b, i as Uint)
