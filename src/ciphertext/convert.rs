@@ -5,7 +5,7 @@ use tfhe::integer::RadixCiphertext;
 
 use crate::server_key::ServerKey;
 
-use super::{FheAsciiChar, FheString, Uint};
+use super::{logic::binary_and, FheAsciiChar, FheString, Uint};
 
 impl FheAsciiChar {
     const CASE_DIFF: Uint = 32;
@@ -15,7 +15,7 @@ impl FheAsciiChar {
         // (65 <= c <= 90)
         let c_geq_65 = k.k.scalar_ge_parallelized(&self.0, 65 as Uint);
         let c_leq_90 = k.k.scalar_le_parallelized(&self.0, 90 as Uint);
-        k.k.mul_parallelized(&c_geq_65, &c_leq_90)
+        binary_and(k, &c_geq_65, &c_leq_90)
     }
 
     /// Returns whether `self` is lowercase.
@@ -23,7 +23,7 @@ impl FheAsciiChar {
         // (97 <= c <= 122)
         let c_geq_97 = k.k.scalar_ge_parallelized(&self.0, 97 as Uint);
         let c_leq_122 = k.k.scalar_le_parallelized(&self.0, 122 as Uint);
-        k.k.mul_parallelized(&c_geq_97, &c_leq_122)
+        binary_and(k, &c_geq_97, &c_leq_122)
     }
 
     /// Returns the lowercase representation of `self`.

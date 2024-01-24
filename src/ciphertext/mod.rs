@@ -136,8 +136,8 @@ impl FheString {
                 log::trace!("len: at index {i_sub_1}");
                 let self_isub1 = &pair[0];
                 let self_i = &pair[1];
-                let self_isub1_neq_0 = k.k.scalar_ne_parallelized(&self_isub1.0, 0);
-                let self_i_eq_0 = k.k.scalar_eq_parallelized(&self_i.0, 0);
+                let self_isub1_neq_0 = k.k.scalar_ne_parallelized(&self_isub1.0, Self::TERMINATOR);
+                let self_i_eq_0 = k.k.scalar_eq_parallelized(&self_i.0, Self::TERMINATOR);
                 let b = binary_and(k, &self_isub1_neq_0, &self_i_eq_0);
                 let i = i_sub_1 + 1;
                 k.k.scalar_mul_parallelized(&b, i as Uint)
@@ -252,13 +252,20 @@ impl FheString {
     fn pad(&self, k: &ServerKey, l: usize) -> Self {
         if l > Self::max_len_with_key(k) {
             panic!("pad length exceeds maximum length")
+        } else if l < self.max_len() {
+            // Nothing to pad.
+            return self.clone();
         }
 
         let mut v = self.0.to_vec();
-        let term = FheAsciiChar(k.create_value(Self::TERMINATOR));
+        let term = Self::term_char(k);
         // l + 1 because of termination character.
         (0..l + 1 - self.0.len()).for_each(|_| v.push(term.clone()));
         FheString(v)
+    }
+
+    fn term_char(k: &ServerKey) -> FheAsciiChar {
+        FheAsciiChar(k.create_value(Self::TERMINATOR))
     }
 }
 
@@ -325,14 +332,20 @@ fn index_of_unchecked_with_options<T: Sync>(
     };
 
     // Evaluate predicate `p` on each element of `v`.
-    let p_eval: Vec<_> = items.par_iter().map(|(i, x)| (i, p(k, x))).collect();
+    let p_eval: Vec<_> = items
+        .par_iter()
+        .map(|(i, x)| {
+            let pi = p(k, x);
+            let pi_mul_i = k.k.scalar_mul_parallelized(&pi, *i as Uint);
+            (i, pi, pi_mul_i)
+        })
+        .collect();
 
     // Find first index for which predicate evaluated to 1.
-    p_eval.into_iter().for_each(|(i, pi)| {
+    p_eval.into_iter().for_each(|(i, pi, pi_mul_i)| {
         log::trace!("index_of_opt_unchecked: at index {i}");
 
         // index = b ? index : (pi ? i : 0)
-        let pi_mul_i = k.k.scalar_mul_parallelized(&pi, *i as Uint);
         index = binary_if_then_else(k, &b, &index, &pi_mul_i);
 
         // b = b || pi
