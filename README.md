@@ -2,7 +2,7 @@
 
 `fhe_string` is a library for computing on encrypted strings.
 
-## API primer
+## Usage
 The following code snippet demonstrates usage of the API.
 ```rust
 use fhe_string::{ClientKey, ServerKey, generate_keys, StringEncryption};
@@ -75,4 +75,4 @@ This project has been developed for the [Zama Bounty Program](https://github.com
 
 ## License
 
-TBD
+See [LICENSE] file.
