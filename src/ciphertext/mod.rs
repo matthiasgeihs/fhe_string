@@ -3,12 +3,14 @@
 use std::error::Error;
 
 use crate::{
-    ciphertext::logic::{binary_and, binary_if_then_else, binary_not, binary_or},
+    ciphertext::logic::if_then_else_zero,
     client_key::{ClientKey, Key},
     server_key::ServerKey,
 };
 use rayon::prelude::*;
-use tfhe::integer::RadixCiphertext;
+use tfhe::integer::{BooleanBlock, RadixCiphertext};
+
+use self::logic::{any, scalar_if_then_else_zero};
 
 mod compare;
 mod convert;
@@ -138,9 +140,10 @@ impl FheString {
                 let self_i = &pair[1];
                 let self_isub1_neq_0 = k.k.scalar_ne_parallelized(&self_isub1.0, Self::TERMINATOR);
                 let self_i_eq_0 = k.k.scalar_eq_parallelized(&self_i.0, Self::TERMINATOR);
-                let b = binary_and(k, &self_isub1_neq_0, &self_i_eq_0);
+                let b = k.k.boolean_bitand(&self_isub1_neq_0, &self_i_eq_0);
                 let i = i_sub_1 + 1;
-                k.k.scalar_mul_parallelized(&b, i as Uint)
+                let i_radix = k.create_value(i as Uint);
+                if_then_else_zero(k, &b, &i_radix)
             })
             .collect::<Vec<_>>();
 
@@ -166,7 +169,7 @@ impl FheString {
 
                 // a[i] = i < index ? a[i] : 0
                 let i_lt_index = k.k.scalar_gt_parallelized(index, i as Uint);
-                let ai = binary_if_then_else(k, &i_lt_index, &ai.0, &term);
+                let ai = k.k.if_then_else_parallelized(&i_lt_index, &ai.0, &term);
                 FheAsciiChar(ai)
             })
             .collect();
@@ -204,12 +207,7 @@ impl FheString {
                 let i_add_index = k.k.scalar_add_parallelized(start, i as Uint);
                 let i_add_index_lt_end = k.k.lt_parallelized(&i_add_index, end);
                 let self_i_add_index = self.char_at(k, &i_add_index);
-                let ai = binary_if_then_else(
-                    k,
-                    &i_add_index_lt_end,
-                    &self_i_add_index.0,
-                    &k.create_zero(),
-                );
+                let ai = if_then_else_zero(k, &i_add_index_lt_end, &self_i_add_index.0);
                 FheAsciiChar(ai)
             })
             .collect();
@@ -230,12 +228,12 @@ impl FheString {
                 // i == j ? a[j] : 0
                 let i_eq_j = k.k.scalar_eq_parallelized(i, j as Uint);
 
-                k.k.mul_parallelized(&i_eq_j, &aj.0)
+                if_then_else_zero(k, &i_eq_j, &aj.0)
             })
             .collect::<Vec<_>>();
 
         let ai =
-            k.k.unchecked_sum_ciphertexts_slice_parallelized(&v)
+            k.k.unchecked_sum_ciphertexts_vec_parallelized(v)
                 .unwrap_or(k.create_zero());
         FheAsciiChar(ai)
     }
@@ -270,7 +268,7 @@ impl FheString {
 }
 
 /// Given `v` and `Enc(i)`, return `v[i]`. Returns `0` if `i` is out of bounds.
-pub fn element_at(k: &ServerKey, v: &[RadixCiphertext], i: &RadixCiphertext) -> RadixCiphertext {
+pub fn element_at_bool(k: &ServerKey, v: &[BooleanBlock], i: &RadixCiphertext) -> BooleanBlock {
     // ai = i == 0 ? a[0] : 0 + ... + i == n ? a[n] : 0
     let v = v
         .par_iter()
@@ -281,12 +279,11 @@ pub fn element_at(k: &ServerKey, v: &[RadixCiphertext], i: &RadixCiphertext) -> 
             // i == j ? a[j] : 0
             let i_eq_j = k.k.scalar_eq_parallelized(i, j as Uint);
 
-            k.k.mul_parallelized(&i_eq_j, aj)
+            k.k.boolean_bitand(&i_eq_j, aj)
         })
         .collect::<Vec<_>>();
 
-    k.k.unchecked_sum_ciphertexts_slice_parallelized(&v)
-        .unwrap_or(k.create_zero())
+    any(k, &v)
 }
 
 /// Searches `v` for the first index `i` with `p(v[i]) == 1`.
@@ -295,7 +292,7 @@ pub fn element_at(k: &ServerKey, v: &[RadixCiphertext], i: &RadixCiphertext) -> 
 pub fn index_of_unchecked<T: Sync>(
     k: &ServerKey,
     v: &[T],
-    p: fn(&ServerKey, &T) -> RadixCiphertext,
+    p: fn(&ServerKey, &T) -> BooleanBlock,
 ) -> FheOption<RadixCiphertext> {
     index_of_unchecked_with_options(k, v, p, false)
 }
@@ -306,7 +303,7 @@ pub fn index_of_unchecked<T: Sync>(
 pub fn rindex_of_unchecked<T: Sync>(
     k: &ServerKey,
     v: &[T],
-    p: fn(&ServerKey, &T) -> RadixCiphertext,
+    p: fn(&ServerKey, &T) -> BooleanBlock,
 ) -> FheOption<RadixCiphertext> {
     index_of_unchecked_with_options(k, v, p, true)
 }
@@ -318,12 +315,11 @@ pub fn rindex_of_unchecked<T: Sync>(
 fn index_of_unchecked_with_options<T: Sync>(
     k: &ServerKey,
     v: &[T],
-    p: fn(&ServerKey, &T) -> RadixCiphertext,
+    p: fn(&ServerKey, &T) -> BooleanBlock,
     reverse: bool,
 ) -> FheOption<RadixCiphertext> {
-    let zero = k.create_zero();
-    let mut b = zero.clone(); // Pattern contained.
-    let mut index = zero.clone(); // Pattern index.
+    let mut b = k.k.create_trivial_boolean_block(false); // Pattern contained.
+    let mut index = k.create_zero(); // Pattern index.
 
     let items: Vec<_> = if reverse {
         v.iter().enumerate().rev().collect()
@@ -336,7 +332,7 @@ fn index_of_unchecked_with_options<T: Sync>(
         .par_iter()
         .map(|(i, x)| {
             let pi = p(k, x);
-            let pi_mul_i = k.k.scalar_mul_parallelized(&pi, *i as Uint);
+            let pi_mul_i = scalar_if_then_else_zero(k, &pi, *i as Uint);
             (i, pi, pi_mul_i)
         })
         .collect();
@@ -346,10 +342,10 @@ fn index_of_unchecked_with_options<T: Sync>(
         log::trace!("index_of_opt_unchecked: at index {i}");
 
         // index = b ? index : (pi ? i : 0)
-        index = binary_if_then_else(k, &b, &index, &pi_mul_i);
+        index = k.k.if_then_else_parallelized(&b, &index, &pi_mul_i);
 
         // b = b || pi
-        b = binary_or(k, &b, &pi);
+        b = k.k.boolean_bitor(&b, &pi);
     });
 
     FheOption {
@@ -361,35 +357,33 @@ fn index_of_unchecked_with_options<T: Sync>(
 /// FheOption represents an encrypted option type.
 pub struct FheOption<T> {
     /// Whether this option decrypts to `Some` or `None`.
-    pub is_some: RadixCiphertext,
+    pub is_some: BooleanBlock,
     /// The optional value.
     pub val: T,
 }
 
 impl FheOption<RadixCiphertext> {
     pub fn decrypt(&self, k: &ClientKey) -> Option<Uint> {
-        let is_some = k.decrypt::<Uint>(&self.is_some);
+        let is_some = k.0.decrypt_bool(&self.is_some);
         match is_some {
-            0 => None,
-            1 => {
+            true => {
                 let val = k.decrypt::<Uint>(&self.val);
                 Some(val)
             }
-            _ => panic!("expected 0 or 1, got {}", is_some),
+            false => None,
         }
     }
 }
 
 impl FheOption<FheString> {
     pub fn decrypt(&self, k: &ClientKey) -> Option<String> {
-        let is_some = k.decrypt::<Uint>(&self.is_some);
+        let is_some = k.0.decrypt_bool(&self.is_some);
         match is_some {
-            0 => None,
-            1 => {
+            true => {
                 let val = self.val.decrypt(k);
                 Some(val)
             }
-            _ => panic!("expected 0 or 1, got {}", is_some),
+            false => None,
         }
     }
 }

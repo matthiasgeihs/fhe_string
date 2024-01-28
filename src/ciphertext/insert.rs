@@ -5,7 +5,7 @@ use tfhe::integer::RadixCiphertext;
 use rayon::{join, prelude::*};
 
 use crate::{
-    ciphertext::{binary_if_then_else, FheAsciiChar, Uint},
+    ciphertext::{FheAsciiChar, Uint},
     server_key::ServerKey,
 };
 
@@ -33,8 +33,7 @@ impl FheString {
                 let i_lt_n_mul_self_len = k.k.lt_parallelized(&i_radix, &n_mul_self_len);
                 let i_mod_self_len = k.k.rem_parallelized(&i_radix, &self_len);
                 let self_i_mod_self_len = self.char_at(k, &i_mod_self_len);
-                let vi = binary_if_then_else(
-                    k,
+                let vi = k.k.if_then_else_parallelized(
                     &i_lt_n_mul_self_len,
                     &self_i_mod_self_len.0,
                     &k.create_zero(),
@@ -100,8 +99,7 @@ impl FheString {
         let c2 = (0..l)
             .into_par_iter()
             .map(|i| {
-                binary_if_then_else(
-                    k,
+                k.k.if_then_else_parallelized(
                     &i_lt_index_add_blen[i],
                     &b_at_i_sub_index[i].0,
                     &a_at_i_sub_blen[i].0,
@@ -121,7 +119,7 @@ impl FheString {
                 let c1 = &a.0[i % a.0.len()].0;
 
                 // c = c0 ? c1 : c2
-                let c = binary_if_then_else(k, &c0, c1, &c2[i]);
+                let c = k.k.if_then_else_parallelized(&c0, c1, &c2[i]);
                 FheAsciiChar(c)
             })
             .collect::<Vec<_>>();

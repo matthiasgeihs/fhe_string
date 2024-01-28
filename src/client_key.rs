@@ -5,7 +5,7 @@ use tfhe::{
     core_crypto::prelude::UnsignedNumeric,
     integer::{
         block_decomposition::{DecomposableInto, RecomposableFrom},
-        RadixCiphertext, RadixClientKey,
+        BooleanBlock, RadixCiphertext, RadixClientKey,
     },
 };
 
@@ -25,6 +25,11 @@ impl ClientKey {
     /// Decrypt a single element.
     pub fn decrypt<T: RecomposableFrom<u64> + UnsignedNumeric>(&self, ct: &RadixCiphertext) -> T {
         self.0.decrypt(ct)
+    }
+
+    /// Decrypt a boolean value.
+    pub fn decrypt_bool(&self, ct: &BooleanBlock) -> bool {
+        self.0.decrypt_bool(ct)
     }
 }
 

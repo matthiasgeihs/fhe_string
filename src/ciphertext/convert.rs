@@ -1,37 +1,37 @@
 //! Functionality for string conversion.
 
 use rayon::prelude::*;
-use tfhe::integer::RadixCiphertext;
+use tfhe::integer::BooleanBlock;
 
 use crate::server_key::ServerKey;
 
-use super::{logic::binary_and, FheAsciiChar, FheString, Uint};
+use super::{FheAsciiChar, FheString, Uint};
 
 impl FheAsciiChar {
-    const CASE_DIFF: Uint = 32;
+    const CASE_DIFF: u8 = 32;
 
     /// Returns whether `self` is uppercase.
-    pub fn is_uppercase(&self, k: &ServerKey) -> RadixCiphertext {
+    pub fn is_uppercase(&self, k: &ServerKey) -> BooleanBlock {
         // (65 <= c <= 90)
         let c_geq_65 = k.k.scalar_ge_parallelized(&self.0, 65 as Uint);
         let c_leq_90 = k.k.scalar_le_parallelized(&self.0, 90 as Uint);
-        binary_and(k, &c_geq_65, &c_leq_90)
+        k.k.boolean_bitand(&c_geq_65, &c_leq_90)
     }
 
     /// Returns whether `self` is lowercase.
-    pub fn is_lowercase(&self, k: &ServerKey) -> RadixCiphertext {
+    pub fn is_lowercase(&self, k: &ServerKey) -> BooleanBlock {
         // (97 <= c <= 122)
-        let c_geq_97 = k.k.scalar_ge_parallelized(&self.0, 97 as Uint);
-        let c_leq_122 = k.k.scalar_le_parallelized(&self.0, 122 as Uint);
-        binary_and(k, &c_geq_97, &c_leq_122)
+        let c_geq_97 = k.k.scalar_ge_parallelized(&self.0, 97 as u8);
+        let c_leq_122 = k.k.scalar_le_parallelized(&self.0, 122 as u8);
+        k.k.boolean_bitand(&c_geq_97, &c_leq_122)
     }
 
     /// Returns the lowercase representation of `self`.
     pub fn to_lowercase(&self, k: &ServerKey) -> FheAsciiChar {
         // c + (c.uppercase ? 32 : 0)
         let ucase = self.is_uppercase(k);
-        let ucase_mul_32 = k.k.scalar_mul_parallelized(&ucase, Self::CASE_DIFF);
-        let lcase = k.k.add_parallelized(&self.0, &ucase_mul_32);
+        let self_add_32 = k.k.scalar_add_parallelized(&self.0, Self::CASE_DIFF as u8);
+        let lcase = k.k.if_then_else_parallelized(&ucase, &self_add_32, &self.0);
         FheAsciiChar(lcase)
     }
 
@@ -39,8 +39,8 @@ impl FheAsciiChar {
     pub fn to_uppercase(&self, k: &ServerKey) -> FheAsciiChar {
         // c - (c.lowercase ? 32 : 0)
         let lcase = self.is_lowercase(k);
-        let lcase_mul_32 = k.k.scalar_mul_parallelized(&lcase, Self::CASE_DIFF);
-        let ucase = k.k.sub_parallelized(&self.0, &lcase_mul_32);
+        let self_sub_32 = k.k.scalar_sub_parallelized(&self.0, Self::CASE_DIFF);
+        let ucase = k.k.if_then_else_parallelized(&lcase, &self_sub_32, &self.0);
         FheAsciiChar(ucase)
     }
 }

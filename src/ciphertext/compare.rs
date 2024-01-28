@@ -3,26 +3,23 @@
 use std::cmp;
 
 use rayon::{join, prelude::*};
-use tfhe::integer::{IntegerCiphertext, RadixCiphertext};
+use tfhe::integer::{BooleanBlock, IntegerCiphertext, RadixCiphertext};
 
 use crate::server_key::ServerKey;
 
-use super::{
-    logic::{binary_and, binary_and_vec, binary_not, binary_or},
-    FheString,
-};
+use super::{logic::all, FheString};
 
 impl FheString {
     /// Returns whether `self` is empty. The result is an encryption of 1 if
     /// this is the case and an encryption of 0 otherwise.
-    pub fn is_empty(&self, k: &ServerKey) -> RadixCiphertext {
+    pub fn is_empty(&self, k: &ServerKey) -> BooleanBlock {
         let term = k.create_value(Self::TERMINATOR);
         k.k.eq_parallelized(&self.0[0].0, &term)
     }
 
     /// Returns `self == s`. The result is an encryption of 1 if this is the
     /// case and an encryption of 0 otherwise.
-    pub fn eq(&self, k: &ServerKey, s: &FheString) -> RadixCiphertext {
+    pub fn eq(&self, k: &ServerKey, s: &FheString) -> BooleanBlock {
         // Compare overlapping part.
         let l = cmp::min(self.max_len(), s.max_len());
         let a = self.substr_clear(k, 0, l);
@@ -33,41 +30,38 @@ impl FheString {
                 // Convert strings to radix integers and rely on optimized comparison.
                 let radix_a = a.to_long_radix();
                 let radix_b = b.to_long_radix();
-                let eq = k.k.eq_parallelized(&radix_a, &radix_b);
-
-                // Trim exceeding radix blocks to ensure compatibility.
-                k.k.trim_radix_blocks_msb(&eq, eq.blocks().len() - k.num_blocks)
+                k.k.eq_parallelized(&radix_a, &radix_b)
             },
             || {
                 // Ensure that overhang is empty.
                 match self.max_len().cmp(&s.max_len()) {
                     cmp::Ordering::Greater => self.substr_clear(k, l, self.max_len()).is_empty(k),
                     cmp::Ordering::Less => s.substr_clear(k, l, s.max_len()).is_empty(k),
-                    cmp::Ordering::Equal => k.create_one(),
+                    cmp::Ordering::Equal => k.k.create_trivial_boolean_block(true),
                 }
             },
         );
 
-        binary_and(k, &overlap_eq, &overhang_empty)
+        k.k.boolean_bitand(&overlap_eq, &overhang_empty)
     }
 
     /// Returns `self != s`. The result is an encryption of 1 if this is the
     /// case and an encryption of 0 otherwise.
-    pub fn ne(&self, k: &ServerKey, s: &FheString) -> RadixCiphertext {
+    pub fn ne(&self, k: &ServerKey, s: &FheString) -> BooleanBlock {
         let eq = self.eq(k, s);
-        binary_not(k, &eq)
+        k.k.boolean_bitnot(&eq)
     }
 
     /// Returns `self <= s`. The result is an encryption of 1 if this is the
     /// case and an encryption of 0 otherwise.
-    pub fn le(&self, k: &ServerKey, s: &FheString) -> RadixCiphertext {
+    pub fn le(&self, k: &ServerKey, s: &FheString) -> BooleanBlock {
         let s_lt_self = s.lt(k, self);
-        binary_not(k, &s_lt_self)
+        k.k.boolean_bitnot(&s_lt_self)
     }
 
     /// Returns `self < s`. The result is an encryption of 1 if this is the case
     /// and an encryption of 0 otherwise.
-    pub fn lt(&self, k: &ServerKey, s: &FheString) -> RadixCiphertext {
+    pub fn lt(&self, k: &ServerKey, s: &FheString) -> BooleanBlock {
         // Pad to same length.
         let l = cmp::max(self.max_len(), s.max_len());
         let a = self.pad(k, l);
@@ -89,37 +83,37 @@ impl FheString {
             },
         );
 
-        let mut is_lt = k.create_zero();
-        let mut is_eq = k.create_one();
+        let mut is_lt = k.k.create_trivial_boolean_block(false);
+        let mut is_eq = k.k.create_trivial_boolean_block(true);
 
         // is_lt = is_lt || ai < bi
         a_lt_b.iter().zip(&a_eq_b).for_each(|(ai_lt_bi, ai_eq_bi)| {
             // is_lt = is_lt || ai < bi && is_eq
-            let ai_lt_bi_and_eq = binary_and(k, ai_lt_bi, &is_eq);
-            is_lt = binary_or(k, &is_lt, &ai_lt_bi_and_eq);
+            let ai_lt_bi_and_eq = k.k.boolean_bitand(ai_lt_bi, &is_eq);
+            is_lt = k.k.boolean_bitor(&is_lt, &ai_lt_bi_and_eq);
 
             // is_eq = is_eq && ai == bi
-            is_eq = binary_and(k, &is_eq, ai_eq_bi);
+            is_eq = k.k.boolean_bitand(&is_eq, ai_eq_bi);
         });
         is_lt
     }
 
     /// Returns `self >= s`. The result is an encryption of 1 if this is the
     /// case and an encryption of 0 otherwise.
-    pub fn ge(&self, k: &ServerKey, s: &FheString) -> RadixCiphertext {
+    pub fn ge(&self, k: &ServerKey, s: &FheString) -> BooleanBlock {
         s.le(k, self)
     }
 
     /// Returns `self > s`. The result is an encryption of 1 if this is the
     /// case and an encryption of 0 otherwise.
-    pub fn gt(&self, k: &ServerKey, s: &FheString) -> RadixCiphertext {
+    pub fn gt(&self, k: &ServerKey, s: &FheString) -> BooleanBlock {
         s.lt(k, self)
     }
 
     /// Returns whether `self` and `s` are equal when ignoring case. The result
     /// is an encryption of 1 if this is the case and an encryption of 0
     /// otherwise.
-    pub fn eq_ignore_ascii_case(&self, k: &ServerKey, s: &FheString) -> RadixCiphertext {
+    pub fn eq_ignore_ascii_case(&self, k: &ServerKey, s: &FheString) -> BooleanBlock {
         // Pad to same length.
         let l = cmp::max(self.max_len(), s.max_len());
         let a = self.pad(k, l);
@@ -135,11 +129,11 @@ impl FheString {
                 })
                 .collect();
 
-        binary_and_vec(k, &v)
+        all(k, &v)
     }
 
     /// Returns whether `self[i..i+s.len]` and `s` are equal.
-    pub fn substr_eq(&self, k: &ServerKey, i: usize, s: &FheString) -> RadixCiphertext {
+    pub fn substr_eq(&self, k: &ServerKey, i: usize, s: &FheString) -> BooleanBlock {
         // Extract substring.
         let a = self.substr_clear(k, i, self.max_len());
         let b = s;
@@ -152,7 +146,7 @@ impl FheString {
                     .map(|(ai, bi)| {
                         let eq = k.k.eq_parallelized(&ai.0, &bi.0);
                         let is_term = k.k.scalar_eq_parallelized(&bi.0, Self::TERMINATOR);
-                        k.k.bitor_parallelized(&eq, &is_term)
+                        k.k.boolean_bitor(&eq, &is_term)
                     })
                     .collect::<Vec<_>>()
             },
@@ -170,7 +164,7 @@ impl FheString {
         }
 
         // Check if all v[i] == 1.
-        binary_and_vec(k, &v)
+        all(k, &v)
     }
 
     /// Returns `self[start..end]`. If `start >= self.len`, returns the empty

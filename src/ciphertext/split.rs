@@ -1,21 +1,11 @@
 //! Functionality for string splitting.
 
 use rayon::prelude::*;
-use tfhe::integer::RadixCiphertext;
+use tfhe::integer::{IntegerCiphertext, RadixCiphertext};
 
-use crate::{
-    ciphertext::{
-        element_at,
-        logic::{binary_not, binary_or},
-    },
-    client_key::ClientKey,
-    server_key::ServerKey,
-};
+use crate::{ciphertext::element_at_bool, client_key::ClientKey, server_key::ServerKey};
 
-use super::{
-    logic::{binary_and, binary_if_then_else},
-    FheAsciiChar, FheOption, FheString, Uint,
-};
+use super::{FheAsciiChar, FheOption, FheString, Uint};
 
 /// An element of an `FheStringSliceVector`.
 #[derive(Clone)]
@@ -43,7 +33,7 @@ impl FheStringSliceVector {
         let v = self
             .v
             .par_iter()
-            .map(|vi| vi.is_some.clone())
+            .map(|vi| vi.is_some.clone().into_radix(k.num_blocks, &k.k))
             .collect::<Vec<_>>();
         k.k.unchecked_sum_ciphertexts_vec_parallelized(v)
             .unwrap_or(k.create_zero())
@@ -54,7 +44,7 @@ impl FheStringSliceVector {
         let mut n = k.create_zero();
 
         let init = FheOption {
-            is_some: k.create_zero(),
+            is_some: k.k.create_trivial_boolean_block(false),
             val: FheStringSlice {
                 start: k.create_zero(),
                 end: k.create_zero(),
@@ -64,17 +54,20 @@ impl FheStringSliceVector {
         let slice = self.v.iter().enumerate().fold(init, |acc, (j, vi)| {
             // acc = i == n && vi.is_some ? (j, vi.end) : acc
             let i_eq_n = k.k.eq_parallelized(i, &n);
-            let is_some = binary_and(k, &i_eq_n, &vi.is_some);
+            let is_some = k.k.boolean_bitand(&i_eq_n, &vi.is_some);
             let j_radix = k.create_value(j as Uint);
-            let start = binary_if_then_else(k, &is_some, &j_radix, &acc.val.start);
-            let end = binary_if_then_else(k, &is_some, &vi.val.end, &acc.val.end);
+            let start =
+                k.k.if_then_else_parallelized(&is_some, &j_radix, &acc.val.start);
+            let end =
+                k.k.if_then_else_parallelized(&is_some, &vi.val.end, &acc.val.end);
             let acc = FheOption {
                 is_some,
                 val: FheStringSlice { start, end },
             };
 
             // n += vi.is_some
-            k.k.add_assign_parallelized(&mut n, &vi.is_some);
+            let is_some_radix = vi.is_some.clone().into_radix(n.blocks().len(), &k.k);
+            k.k.add_assign_parallelized(&mut n, &is_some_radix);
 
             acc
         });
@@ -95,7 +88,6 @@ impl FheStringSliceVector {
             n += v[i].is_start
         */
         let mut n = k.create_zero();
-        let zero = k.create_zero();
 
         self.v = self
             .v
@@ -103,10 +95,11 @@ impl FheStringSliceVector {
             .map(|vi| {
                 // is_some = n < i ? vi.is_some : 0
                 let n_lt_i = k.k.lt_parallelized(&n, i);
-                let is_some = binary_if_then_else(k, &n_lt_i, &vi.is_some, &zero);
+                let is_some = k.k.boolean_bitand(&n_lt_i, &vi.is_some);
 
                 // n += v[i].is_some
-                k.k.add_assign_parallelized(&mut n, &vi.is_some);
+                let is_some_radix = vi.is_some.clone().into_radix(n.blocks().len(), &k.k);
+                k.k.add_assign_parallelized(&mut n, &is_some_radix);
 
                 FheOption {
                     is_some,
@@ -118,7 +111,7 @@ impl FheStringSliceVector {
 
     /// Truncate the last element if it is empty.
     fn truncate_last_if_empty(&mut self, k: &ServerKey) {
-        let mut b = k.create_one();
+        let mut b = k.k.create_trivial_boolean_block(true);
         let mut v = self
             .v
             .iter()
@@ -128,14 +121,14 @@ impl FheStringSliceVector {
                 let is_empty = k.k.ge_parallelized(&vi.val.start, &vi.val.end);
 
                 // is_some = b && vi.is_some && is_empty ? 0 : vi.is_some
-                let b_and_start = binary_and(k, &b, &vi.is_some);
-                let b_and_start_and_empty = binary_and(k, &b_and_start, &is_empty);
-                let is_some =
-                    binary_if_then_else(k, &b_and_start_and_empty, &k.create_zero(), &vi.is_some);
+                let b_and_start = k.k.boolean_bitand(&b, &vi.is_some);
+                let b_and_start_and_empty = k.k.boolean_bitand(&b_and_start, &is_empty);
+                let not_b_and_start_and_empty = k.k.boolean_bitnot(&b_and_start_and_empty);
+                let is_some = k.k.boolean_bitand(&not_b_and_start_and_empty, &vi.is_some);
 
                 // b = b && !vi.is_some
-                let not_start = binary_not(k, &vi.is_some);
-                b = binary_and(k, &b, &not_start);
+                let not_start = k.k.boolean_bitnot(&vi.is_some);
+                b = k.k.boolean_bitand(&b, &not_start);
 
                 FheOption {
                     is_some,
@@ -150,19 +143,20 @@ impl FheStringSliceVector {
     /// Expand the first slice to the beginning of the string.
     fn expand_first(&mut self, k: &ServerKey) {
         // Find the first item and set its start point to 0.
-        let mut not_found = k.create_one();
+        let mut not_found = k.k.create_trivial_boolean_block(true);
         let zero = k.create_zero();
         self.v = self
             .v
             .iter()
             .map(|vi| {
                 // start = not_found && vi.is_some ? 0 : vi.start
-                let not_found_and_some = binary_and(k, &not_found, &vi.is_some);
-                let start = binary_if_then_else(k, &not_found_and_some, &zero, &vi.val.start);
+                let not_found_and_some = k.k.boolean_bitand(&not_found, &vi.is_some);
+                let start =
+                    k.k.if_then_else_parallelized(&not_found_and_some, &zero, &vi.val.start);
 
                 // not_found = not_found && !vi.is_some
-                let not_some = binary_not(k, &vi.is_some);
-                not_found = binary_and(k, &not_found, &not_some);
+                let not_some = k.k.boolean_bitnot(&vi.is_some);
+                not_found = k.k.boolean_bitand(&not_found, &not_some);
 
                 FheOption {
                     is_some: vi.is_some.clone(),
@@ -178,7 +172,7 @@ impl FheStringSliceVector {
     /// Expand the last slice to the end of the string.
     fn expand_last(&mut self, k: &ServerKey) {
         // Find the last item and set its end point to s.len.
-        let mut not_found = k.create_one();
+        let mut not_found = k.k.create_trivial_boolean_block(true);
         let self_len = self.s.len(k);
         let mut v = self
             .v
@@ -186,12 +180,13 @@ impl FheStringSliceVector {
             .rev()
             .map(|vi| {
                 // end = not_found && vi.is_some ? self.s.len : vi.end
-                let not_found_and_some = binary_and(k, &not_found, &vi.is_some);
-                let end = binary_if_then_else(k, &not_found_and_some, &self_len, &vi.val.end);
+                let not_found_and_some = k.k.boolean_bitand(&not_found, &vi.is_some);
+                let end =
+                    k.k.if_then_else_parallelized(&not_found_and_some, &self_len, &vi.val.end);
 
                 // not_found = not_found && !vi.is_some
-                let not_some = binary_not(k, &vi.is_some);
-                not_found = binary_and(k, &not_found, &not_some);
+                let not_some = k.k.boolean_bitnot(&vi.is_some);
+                not_found = k.k.boolean_bitand(&not_found, &not_some);
 
                 FheOption {
                     is_some: vi.is_some.clone(),
@@ -212,10 +207,10 @@ impl FheStringSliceVector {
         self.v
             .iter()
             .filter_map(|vi| {
-                let is_some = k.0.decrypt::<Uint>(&vi.is_some);
+                let is_some = k.0.decrypt_bool(&vi.is_some);
                 match is_some {
-                    0 => None,
-                    _ => {
+                    false => None,
+                    true => {
                         let start = k.0.decrypt::<Uint>(&vi.val.start) as usize;
                         let end = k.0.decrypt::<Uint>(&vi.val.end) as usize;
                         let slice = s_dec.get(start..end).unwrap_or_default();
@@ -273,7 +268,6 @@ impl FheString {
         let n = self.max_len() + 2; // Maximum number of entries.
         let n_hidden = k.k.scalar_add_parallelized(&self_len, 2 as Uint); // Better bound based on hidden length.
         let mut next_match = self_len.clone();
-        let zero = k.create_zero();
         let mut elems = (0..n)
             .rev()
             .map(|i| {
@@ -281,13 +275,13 @@ impl FheString {
 
                 // is_some_i = i == 0 || matches[i - p.len] && i < self.len + 2
                 let is_some = if i == 0 {
-                    k.create_one()
+                    k.k.create_trivial_boolean_block(true)
                 } else {
                     let i_radix = k.create_value(i as Uint);
                     let i_sub_plen = k.k.sub_parallelized(&i_radix, &p_len);
-                    let mi = element_at(k, &matches, &i_sub_plen);
+                    let mi = element_at_bool(k, &matches, &i_sub_plen);
                     let i_lt_n_hidden = k.k.scalar_gt_parallelized(&n_hidden, i as Uint);
-                    binary_if_then_else(k, &i_lt_n_hidden, &mi, &zero)
+                    k.k.boolean_bitand(&i_lt_n_hidden, &mi)
                 };
 
                 // next_match_target = i + (inclusive ? p.len : 0)
@@ -298,12 +292,15 @@ impl FheString {
                 };
 
                 // next_match[i] = matches[i] ? next_match_target : next_match[i+1]
-                let matches_i = matches.get(i).unwrap_or(&zero);
-                next_match = binary_if_then_else(k, matches_i, &next_match_target, &next_match);
+                let false_block = k.k.create_trivial_boolean_block(false);
+                let matches_i = matches.get(i).unwrap_or(&false_block);
+                next_match =
+                    k.k.if_then_else_parallelized(matches_i, &next_match_target, &next_match);
 
                 // start = max(i - p.empty, 0)
                 let start = if i > 0 {
-                    k.k.sub_parallelized(&k.create_value(i as Uint), &pattern_empty)
+                    let pattern_empty_radix = pattern_empty.clone().into_radix(k.num_blocks, &k.k);
+                    k.k.sub_parallelized(&k.create_value(i as Uint), &pattern_empty_radix)
                 } else {
                     k.create_zero()
                 };
@@ -435,14 +432,14 @@ impl FheString {
             let w = c.is_whitespace(k);
             // Also check for string termination character.
             let z = k.k.scalar_eq_parallelized(&c.0, FheString::TERMINATOR);
-            binary_or(k, &w, &z)
+            k.k.boolean_bitor(&w, &z)
         };
         let whitespace = self.find_all_pred_unchecked(k, is_whitespace);
         let next_whitespace = self.find_all_next_pred_unchecked(k, is_whitespace);
 
         let zero = k.create_zero();
         let opt_default = FheOption {
-            is_some: zero.clone(),
+            is_some: k.k.create_trivial_boolean_block(false),
             val: zero.clone(),
         };
 
@@ -453,18 +450,22 @@ impl FheString {
             .enumerate()
             .map(|(i, _)| {
                 // is_some = !whitespace[i] && (i == 0 || whitespace[i-1]);
-                let not_whitespace = binary_not(k, &whitespace[i]);
+                let not_whitespace = k.k.boolean_bitnot(&whitespace[i]);
                 let i_eq_0_or_prev_whitespace = if i == 0 {
-                    k.create_one()
+                    k.k.create_trivial_boolean_block(true)
                 } else {
                     whitespace[i - 1].clone()
                 };
-                let is_some = binary_and(k, &not_whitespace, &i_eq_0_or_prev_whitespace);
+                let is_some =
+                    k.k.boolean_bitand(&not_whitespace, &i_eq_0_or_prev_whitespace);
 
                 // end = s.index_of_next_white_space_or_max_len(i+1);
                 let index_of_next = next_whitespace.get(i + 1).unwrap_or(&opt_default);
-                let end =
-                    binary_if_then_else(k, &index_of_next.is_some, &index_of_next.val, &self_len);
+                let end = k.k.if_then_else_parallelized(
+                    &index_of_next.is_some,
+                    &index_of_next.val,
+                    &self_len,
+                );
 
                 FheOption {
                     is_some,
