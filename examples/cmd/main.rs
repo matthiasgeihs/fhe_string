@@ -30,6 +30,10 @@ struct Args {
     /// Value used for operations that require parameter `n`.
     #[arg(long, default_value_t = 3)]
     n: usize,
+
+    /// Filter for specific test cases by test case name.
+    #[arg(long)]
+    filter: Option<String>,
 }
 
 fn main() {
@@ -42,6 +46,7 @@ fn main() {
     let pattern = args.pattern;
     let substitution = args.substitution;
     let n = args.n;
+    let filter = args.filter;
 
     println!("Generating keys...");
     let (client_key, server_key) = generate_keys_with_params(PARAM_MESSAGE_2_CARRY_2_KS_PBS);
@@ -509,6 +514,12 @@ fn main() {
 
     let start = Instant::now();
     test_cases.iter().for_each(|t| {
+        if let Some(filter) = &filter {
+            if !(t.name)(&args).contains(filter) {
+                return;
+            }
+        }
+
         let start = Instant::now();
         let result_std = (t.std)(&args);
         let duration_std = start.elapsed();
