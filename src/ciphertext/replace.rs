@@ -1,9 +1,13 @@
 //! Functionality for string replacement.
 
-use tfhe::integer::RadixCiphertext;
+use tfhe::integer::{IntegerCiphertext, RadixCiphertext};
 
 use crate::{
-    ciphertext::{binary_and, binary_if_then_else, element_at, Uint},
+    ciphertext::{
+        element_at_bool,
+        logic::{if_then_else_bool, if_then_else_zero},
+        Uint,
+    },
     server_key::ServerKey,
 };
 
@@ -55,11 +59,10 @@ impl FheString {
             v[i] = in_match ? s[j] : self[c]
             j += 1
          */
-        let mut in_match = k.create_zero();
+        let mut in_match = k.k.create_trivial_boolean_block(false);
         let mut j = k.create_zero();
         let mut n = k.create_zero();
         let mut v = Vec::<FheAsciiChar>::new();
-        let zero = k.create_zero();
         (0..l).for_each(|i| {
             log::trace!("replace_nopt: at index {i}");
 
@@ -68,25 +71,29 @@ impl FheString {
             let c = k.k.scalar_add_parallelized(&n_mul_lendiff, i as Uint);
 
             let j_lt_slen = k.k.lt_parallelized(&j, &s_len);
-            let match_and_jltslen = binary_and(k, &in_match, &j_lt_slen);
+            let match_and_jltslen = k.k.boolean_bitand(&in_match, &j_lt_slen);
 
-            let found_c = element_at(k, &found, &c);
+            let found_c = element_at_bool(k, &found, &c);
             let foundc_and_n_lt_nmax = match n_max {
                 Some(n_max) => {
                     let n_lt_nmax = k.k.lt_parallelized(&n, n_max);
-                    binary_and(k, &found_c, &n_lt_nmax)
+                    k.k.boolean_bitand(&found_c, &n_lt_nmax)
                 }
                 None => found_c,
             };
-            let n_add_found_c = k.k.add_parallelized(&n, &foundc_and_n_lt_nmax);
+            let foundc_and_n_lt_nmax_radix = foundc_and_n_lt_nmax
+                .clone()
+                .into_radix(n.blocks().len(), &k.k);
+            let n_add_found_c = k.k.add_parallelized(&n, &foundc_and_n_lt_nmax_radix);
 
-            in_match = binary_if_then_else(k, &match_and_jltslen, &in_match, &foundc_and_n_lt_nmax);
-            j = binary_if_then_else(k, &match_and_jltslen, &j, &zero);
-            n = binary_if_then_else(k, &match_and_jltslen, &n, &n_add_found_c);
+            in_match = if_then_else_bool(k, &match_and_jltslen, &in_match, &foundc_and_n_lt_nmax);
+            j = if_then_else_zero(k, &match_and_jltslen, &j);
+            n =
+                k.k.if_then_else_parallelized(&match_and_jltslen, &n, &n_add_found_c);
 
             let sj = s.char_at(k, &j).0;
             let self_c = self.char_at(k, &c).0;
-            let vi = binary_if_then_else(k, &in_match, &sj, &self_c);
+            let vi = k.k.if_then_else_parallelized(&in_match, &sj, &self_c);
             v.push(FheAsciiChar(vi));
 
             j = k.k.scalar_add_parallelized(&j, 1 as Uint);

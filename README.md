@@ -75,4 +75,4 @@ This project has been developed for the [Zama Bounty Program](https://github.com
 
 ## License
 
-See [LICENSE] file.
+See [LICENSE](LICENSE) file.

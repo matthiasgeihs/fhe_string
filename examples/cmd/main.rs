@@ -2,7 +2,10 @@ use std::{any::Any, fmt::Debug, ops::Add, time::Instant};
 
 use clap::Parser;
 use fhe_string::{generate_keys_with_params, ClientKey, FheOption, FheString, ServerKey};
-use tfhe::{integer::RadixCiphertext, shortint::prelude::PARAM_MESSAGE_2_CARRY_2_KS_PBS};
+use tfhe::{
+    integer::{BooleanBlock, RadixCiphertext},
+    shortint::prelude::PARAM_MESSAGE_2_CARRY_2_KS_PBS,
+};
 
 /// Run string operations in the encrypted domain.
 #[derive(Parser, Debug)]
@@ -575,32 +578,22 @@ struct TestCase {
     fhe: fn(input: &TestCaseInput) -> Box<dyn TestCaseOutput>,
 }
 
-fn decrypt_bool(k: &ClientKey, b: &RadixCiphertext) -> bool {
-    let x = k.decrypt::<u64>(b);
-    int_to_bool(x)
+fn decrypt_bool(k: &ClientKey, b: &BooleanBlock) -> bool {
+    k.decrypt_bool(b)
 }
 
 fn decrypt_option_string_pair(
     k: &ClientKey,
     opt: &FheOption<(FheString, FheString)>,
 ) -> Option<(String, String)> {
-    let is_some = k.decrypt::<u64>(&opt.is_some);
+    let is_some = k.decrypt_bool(&opt.is_some);
     match is_some {
-        0 => None,
-        1 => {
+        false => None,
+        true => {
             let val0 = opt.val.0.decrypt(k);
             let val1 = opt.val.1.decrypt(k);
             Some((val0, val1))
         }
-        _ => panic!("expected 0 or 1, got {}", is_some),
-    }
-}
-
-fn int_to_bool(x: u64) -> bool {
-    match x {
-        0 => false,
-        1 => true,
-        _ => panic!("expected 0 or 1, got {}", x),
     }
 }
 
