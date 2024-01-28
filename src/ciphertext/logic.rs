@@ -35,10 +35,10 @@ pub fn if_then_else_bool(
     b: &BooleanBlock,
     c: &BooleanBlock,
 ) -> BooleanBlock {
-    let a_and_b = k.k.boolean_bitand(a, b);
-    let not_a = k.k.boolean_bitnot(a);
-    let not_a_and_c = k.k.boolean_bitand(&not_a, c);
-    k.k.boolean_bitor(&a_and_b, &not_a_and_c)
+    let b: RadixCiphertext = b.clone().into_radix(1, &k.k);
+    let c: RadixCiphertext = c.clone().into_radix(1, &k.k);
+    let d = k.k.if_then_else_parallelized(a, &b, &c);
+    BooleanBlock::new_unchecked(d.blocks()[0].clone())
 }
 
 // Returns true if any of the elements of `v` is true.
