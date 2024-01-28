@@ -110,26 +110,10 @@ impl FheString {
         s.lt(k, self)
     }
 
-    /// Returns whether `self` and `s` are equal when ignoring case. The result
-    /// is an encryption of 1 if this is the case and an encryption of 0
-    /// otherwise.
+    /// Returns whether `self` and `s` are equal when ignoring case.
     pub fn eq_ignore_ascii_case(&self, k: &ServerKey, s: &FheString) -> BooleanBlock {
-        // Pad to same length.
-        let l = cmp::max(self.max_len(), s.max_len());
-        let a = self.pad(k, l);
-        let b = s.pad(k, l);
-
-        let v: Vec<_> =
-            a.0.par_iter()
-                .zip(&b.0)
-                .map(|(ai, bi)| {
-                    let ai_low = ai.to_lowercase(k);
-                    let bi_low = bi.to_lowercase(k);
-                    k.k.eq_parallelized(&ai_low.0, &bi_low.0)
-                })
-                .collect();
-
-        all(k, &v)
+        let (self_lower, s_lower) = join(|| self.to_lowercase(k), || s.to_lowercase(k));
+        self_lower.eq(k, &s_lower)
     }
 
     /// Returns whether `self[i..i+s.len]` and `s` are equal.
