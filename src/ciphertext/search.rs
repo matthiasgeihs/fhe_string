@@ -1,9 +1,12 @@
 //! Functionality for string search.
 
-use rayon::{join, prelude::*};
+use rayon::prelude::*;
 use tfhe::integer::{BooleanBlock, RadixCiphertext};
 
-use crate::{ciphertext::Uint, server_key::ServerKey};
+use crate::{
+    ciphertext::{logic::all, Uint},
+    server_key::ServerKey,
+};
 
 use super::{
     index_of_unchecked,
@@ -220,14 +223,26 @@ impl FheString {
     /// Returns whether `self` ends with the string `s`. The result is an
     /// encryption of 1 if this is the case and an encryption of 0 otherwise.
     pub fn ends_with(&self, k: &ServerKey, s: &FheString) -> BooleanBlock {
-        let opti = self.rfind(k, s);
+        let v = (0..self.0.len() - 1)
+            .into_par_iter()
+            .map(|i| {
+                log::trace!("ends_with: at index {i}");
+                let a = self.0.get(i..).unwrap_or_default();
 
-        // is_end = self.len == i + s.len
-        let (self_len, s_len) = join(|| self.len(k), || s.len(k));
-        let i_add_s_len = k.k.add_parallelized(&opti.val, &s_len);
-        let is_end = k.k.eq_parallelized(&self_len, &i_add_s_len);
+                // v[i] = a[i] == b[i] || b[i + 1] == 0
+                let v = a
+                    .par_iter()
+                    .zip(&s.0)
+                    .map(|(ai, bi)| {
+                        let eq = k.k.eq_parallelized(&ai.0, &bi.0);
+                        let is_term = &k.k.scalar_eq_parallelized(&ai.0, FheString::TERMINATOR);
+                        k.k.boolean_bitor(&eq, &is_term)
+                    })
+                    .collect::<Vec<_>>();
+                all(k, &v)
+            })
+            .collect::<Vec<_>>();
 
-        // ends_with = contained && is_end
-        k.k.boolean_bitand(&opti.is_some, &is_end)
+        any(k, &v)
     }
 }

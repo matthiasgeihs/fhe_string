@@ -124,7 +124,7 @@ impl FheString {
 
         let (mut v, overhang_empty) = join(
             || {
-                // v[i] = a[i] == b[i] && b[i] != 0
+                // v[i] = a[i] == b[i] || b[i] == 0
                 a.0.par_iter()
                     .zip(&b.0)
                     .map(|(ai, bi)| {
