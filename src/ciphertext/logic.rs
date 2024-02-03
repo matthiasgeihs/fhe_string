@@ -7,7 +7,7 @@ use tfhe::integer::{
 
 use crate::server_key::ServerKey;
 
-use super::{FheUsize, Uint};
+use super::FheUsize;
 
 // Returns `a ? b : 0`.
 pub fn if_then_else_zero<T: IntegerRadixCiphertext>(k: &ServerKey, a: &BooleanBlock, b: &T) -> T {
@@ -60,6 +60,6 @@ pub fn all(k: &ServerKey, v: &[BooleanBlock]) -> BooleanBlock {
     let sum = k.k.unchecked_sum_ciphertexts_vec_parallelized(v);
     match sum {
         None => k.k.create_trivial_boolean_block(true),
-        Some(sum) => k.k.scalar_eq_parallelized(&sum, l as Uint),
+        Some(sum) => k.k.scalar_eq_parallelized(&sum, l as u64),
     }
 }

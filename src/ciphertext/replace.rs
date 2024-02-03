@@ -6,7 +6,6 @@ use crate::{
     ciphertext::{
         element_at_bool,
         logic::{if_then_else_bool, if_then_else_zero},
-        Uint,
     },
     server_key::ServerKey,
 };
@@ -68,7 +67,7 @@ impl FheString {
 
             // c = i + n * len_diff
             let n_mul_lendiff = k.k.mul_parallelized(&n, &len_diff);
-            let c = k.k.scalar_add_parallelized(&n_mul_lendiff, i as Uint);
+            let c = k.k.scalar_add_parallelized(&n_mul_lendiff, i as u64);
 
             let j_lt_slen = k.k.lt_parallelized(&j, &s_len);
             let match_and_jltslen = k.k.boolean_bitand(&in_match, &j_lt_slen);
@@ -96,7 +95,7 @@ impl FheString {
             let vi = k.k.if_then_else_parallelized(&in_match, &sj, &self_c);
             v.push(FheAsciiChar(vi));
 
-            j = k.k.scalar_add_parallelized(&j, 1 as Uint);
+            j = k.k.scalar_add_parallelized(&j, 1u8);
         });
 
         // Append 0 to terminate string.

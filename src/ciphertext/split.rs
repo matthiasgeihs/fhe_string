@@ -5,7 +5,7 @@ use tfhe::integer::IntegerCiphertext;
 
 use crate::{ciphertext::element_at_bool, client_key::ClientKey, server_key::ServerKey};
 
-use super::{FheAsciiChar, FheOption, FheString, FheUsize, Uint};
+use super::{FheAsciiChar, FheOption, FheString, FheUsize};
 
 /// An element of an `FheStringSliceVector`.
 #[derive(Clone)]
@@ -269,7 +269,7 @@ impl FheString {
         let self_len = self.len(k);
 
         let n = self.max_len() + 2; // Maximum number of entries.
-        let n_hidden = k.k.scalar_add_parallelized(&self_len, 2 as Uint); // Better bound based on hidden length.
+        let n_hidden = k.k.scalar_add_parallelized(&self_len, 2u8); // Better bound based on hidden length.
         let mut next_match = self_len.clone();
         let mut elems = (0..n)
             .rev()
@@ -283,13 +283,13 @@ impl FheString {
                     let i_radix = FheUsize::new_trivial(k, i);
                     let i_sub_plen = k.k.sub_parallelized(&i_radix, &p_len);
                     let mi = element_at_bool(k, &matches, &i_sub_plen);
-                    let i_lt_n_hidden = k.k.scalar_gt_parallelized(&n_hidden, i as Uint);
+                    let i_lt_n_hidden = k.k.scalar_gt_parallelized(&n_hidden, i as u64);
                     k.k.boolean_bitand(&i_lt_n_hidden, &mi)
                 };
 
                 // next_match_target = i + (inclusive ? p.len : 0)
                 let next_match_target = if inclusive {
-                    k.k.scalar_add_parallelized(&p_len, i as Uint)
+                    k.k.scalar_add_parallelized(&p_len, i as u64)
                 } else {
                     FheUsize::new_trivial(k, i)
                 };

@@ -3,7 +3,7 @@
 use rayon::{join, prelude::*};
 
 use crate::{
-    ciphertext::{logic::if_then_else_zero, FheAsciiChar, Uint},
+    ciphertext::{logic::if_then_else_zero, FheAsciiChar},
     server_key::ServerKey,
 };
 
@@ -58,7 +58,7 @@ impl FheString {
                     .into_par_iter()
                     .map(|i| {
                         let index_add_blen = k.k.add_parallelized(index, &b_len);
-                        k.k.scalar_gt_parallelized(&index_add_blen, i as Uint)
+                        k.k.scalar_gt_parallelized(&index_add_blen, i as u64)
                     })
                     .collect::<Vec<_>>()
             },
@@ -107,7 +107,7 @@ impl FheString {
                 // v[i] = i < index ? a[i] : (i < index + b.len ? b[i - index] : a[i - b.len])
 
                 // c0 = i < index
-                let c0 = k.k.scalar_gt_parallelized(index, i as Uint);
+                let c0 = k.k.scalar_gt_parallelized(index, i as u64);
 
                 // c1 = a[i]
                 let c1 = &a.0[i % a.0.len()].0;

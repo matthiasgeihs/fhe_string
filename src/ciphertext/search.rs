@@ -3,10 +3,7 @@
 use rayon::prelude::*;
 use tfhe::integer::BooleanBlock;
 
-use crate::{
-    ciphertext::{logic::all, Uint},
-    server_key::ServerKey,
-};
+use crate::{ciphertext::logic::all, server_key::ServerKey};
 
 use super::{
     index_of_unchecked,
@@ -101,7 +98,7 @@ impl FheString {
                 in_match = if_then_else_bool(k, &in_match, &in_match, mi);
 
                 // j += 1
-                k.k.scalar_add_assign_parallelized(&mut j, 1 as Uint);
+                k.k.scalar_add_assign_parallelized(&mut j, 1u8);
 
                 // in_match = in_match && j < s.len
                 let j_lt_slen = k.k.lt_parallelized(&j, &s_len);
@@ -147,7 +144,7 @@ impl FheString {
                 j = k.k.if_then_else_parallelized(&j_lt_slen_and_mi, &zero, &j);
 
                 // j += 1
-                k.k.scalar_add_assign_parallelized(&mut j, 1 as Uint);
+                k.k.scalar_add_assign_parallelized(&mut j, 1u8);
 
                 mi
             })
@@ -189,7 +186,7 @@ impl FheString {
         let subvec = &self.0.get(i..).unwrap_or_default();
         let index = index_of_unchecked(k, subvec, p);
         // Add offset.
-        let val = k.k.scalar_add_parallelized(&index.val, i as Uint);
+        let val = k.k.scalar_add_parallelized(&index.val, i as u64);
         FheOption {
             is_some: index.is_some,
             val,

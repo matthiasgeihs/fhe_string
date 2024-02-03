@@ -42,9 +42,6 @@ impl FheAsciiChar {
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct FheString(pub(crate) Vec<FheAsciiChar>);
 
-/// Type used for scalar operations.
-type Uint = u64;
-
 impl FheString {
     /// ASCII value of the string termination character.
     const TERMINATOR: u8 = 0;
@@ -174,7 +171,7 @@ impl FheString {
                 log::trace!("substr_to: at index {i}");
 
                 // a[i] = i < index ? a[i] : 0
-                let i_lt_index = k.k.scalar_gt_parallelized(index, i as Uint);
+                let i_lt_index = k.k.scalar_gt_parallelized(index, i as u64);
                 let ai = if_then_else_zero(k, &i_lt_index, &ai.0);
                 FheAsciiChar(ai)
             })
@@ -190,7 +187,7 @@ impl FheString {
                 log::trace!("substr_from: at index {i}");
 
                 // a[i] = a[i + index]
-                let i_add_index = k.k.scalar_add_parallelized(index, i as Uint);
+                let i_add_index = k.k.scalar_add_parallelized(index, i as u64);
                 self.char_at(k, &i_add_index)
             })
             .collect();
@@ -205,7 +202,7 @@ impl FheString {
                 log::trace!("substr_end: at index {i}");
 
                 // a[i] = i + index < end ? a[i + index] : 0
-                let i_add_index = k.k.scalar_add_parallelized(start, i as Uint);
+                let i_add_index = k.k.scalar_add_parallelized(start, i as u64);
                 let i_add_index_lt_end = k.k.lt_parallelized(&i_add_index, end);
                 let self_i_add_index = self.char_at(k, &i_add_index);
                 let ai = if_then_else_zero(k, &i_add_index_lt_end, &self_i_add_index.0);
@@ -227,7 +224,7 @@ impl FheString {
                 log::trace!("char_at: at index {j}");
 
                 // i == j ? a[j] : 0
-                let i_eq_j = k.k.scalar_eq_parallelized(i, j as Uint);
+                let i_eq_j = k.k.scalar_eq_parallelized(i, j as u64);
                 if_then_else_zero(k, &i_eq_j, &aj.0)
             })
             .collect::<Vec<_>>();
@@ -280,7 +277,7 @@ pub fn element_at_bool(k: &ServerKey, v: &[BooleanBlock], i: &FheUsize) -> Boole
             log::trace!("element_at: at index {j}");
 
             // i == j ? a[j] : 0
-            let i_eq_j = k.k.scalar_eq_parallelized(i, j as Uint);
+            let i_eq_j = k.k.scalar_eq_parallelized(i, j as u64);
 
             k.k.boolean_bitand(&i_eq_j, aj)
         })
@@ -335,7 +332,7 @@ fn index_of_unchecked_with_options<T: Sync>(
         .par_iter()
         .map(|(i, x)| {
             let pi = p(k, x);
-            let pi_mul_i = scalar_if_then_else_zero(k, &pi, *i as Uint);
+            let pi_mul_i = scalar_if_then_else_zero(k, &pi, *i as u64);
             (i, pi, pi_mul_i)
         })
         .collect();
@@ -366,11 +363,11 @@ pub struct FheOption<T> {
 }
 
 impl FheOption<RadixCiphertext> {
-    pub fn decrypt(&self, k: &ClientKey) -> Option<Uint> {
+    pub fn decrypt(&self, k: &ClientKey) -> Option<u64> {
         let is_some = k.k.decrypt_bool(&self.is_some);
         match is_some {
             true => {
-                let val = k.decrypt::<Uint>(&self.val);
+                let val = k.decrypt::<u64>(&self.val);
                 Some(val)
             }
             false => None,

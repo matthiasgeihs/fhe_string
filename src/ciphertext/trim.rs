@@ -7,7 +7,7 @@ use crate::server_key::ServerKey;
 
 use super::{
     index_of_unchecked, logic::if_then_else_zero, rindex_of_unchecked, FheAsciiChar, FheOption,
-    FheString, FheUsize, Uint,
+    FheString, FheUsize,
 };
 
 impl FheAsciiChar {
@@ -17,10 +17,10 @@ impl FheAsciiChar {
         // (Vertical tab), 12 (Form feed), 13 (Carriage return), 32 (Space)
 
         // (9 <= c <= 13) || c == 32
-        let c_geq_9 = k.k.scalar_ge_parallelized(&self.0, 9 as Uint);
-        let c_leq_13 = k.k.scalar_le_parallelized(&self.0, 13 as Uint);
+        let c_geq_9 = k.k.scalar_ge_parallelized(&self.0, 9u8);
+        let c_leq_13 = k.k.scalar_le_parallelized(&self.0, 13u8);
         let c_geq_9_and_c_leq_13 = k.k.boolean_bitand(&c_geq_9, &c_leq_13);
-        let c_eq_32 = k.k.scalar_eq_parallelized(&self.0, 32 as Uint);
+        let c_eq_32 = k.k.scalar_eq_parallelized(&self.0, 32u8);
         k.k.boolean_bitor(&c_geq_9_and_c_leq_13, &c_eq_32)
     }
 }
@@ -123,7 +123,7 @@ impl FheString {
             .enumerate()
             .map(|(i, c)| {
                 // a[i] = i < index ? a[i] : 0
-                let i_lt_index = k.k.scalar_gt_parallelized(index, i as Uint);
+                let i_lt_index = k.k.scalar_gt_parallelized(index, i as u64);
                 let ai = if_then_else_zero(k, &i_lt_index, &c.0);
                 FheAsciiChar(ai)
             })
