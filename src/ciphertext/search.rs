@@ -1,7 +1,7 @@
 //! Functionality for string search.
 
 use rayon::prelude::*;
-use tfhe::integer::{BooleanBlock, RadixCiphertext};
+use tfhe::integer::BooleanBlock;
 
 use crate::{
     ciphertext::{logic::all, Uint},
@@ -11,7 +11,7 @@ use crate::{
 use super::{
     index_of_unchecked,
     logic::{any, if_then_else_bool, if_then_else_zero},
-    rindex_of_unchecked, FheAsciiChar, FheOption, FheString,
+    rindex_of_unchecked, FheAsciiChar, FheOption, FheString, FheUsize,
 };
 
 impl FheString {
@@ -23,7 +23,7 @@ impl FheString {
     }
 
     /// Returns the index of the first occurrence of `s`, if existent.
-    pub fn find(&self, k: &ServerKey, s: &FheString) -> FheOption<RadixCiphertext> {
+    pub fn find(&self, k: &ServerKey, s: &FheString) -> FheOption<FheUsize> {
         let found = self.find_all(k, s);
 
         // Determine index of first match.
@@ -58,7 +58,7 @@ impl FheString {
         &self,
         k: &ServerKey,
         p: fn(&ServerKey, &FheAsciiChar) -> BooleanBlock,
-    ) -> Vec<FheOption<RadixCiphertext>> {
+    ) -> Vec<FheOption<FheUsize>> {
         self.0
             .par_iter()
             .enumerate()
@@ -90,7 +90,7 @@ impl FheString {
             in_match = in_match && j < s.len
          */
         let mut in_match = k.k.create_trivial_boolean_block(false);
-        let mut j = k.create_zero();
+        let mut j = FheUsize::new_trivial(k, 0);
         matches
             .iter()
             .map(|mi| {
@@ -132,8 +132,8 @@ impl FheString {
                 j = matches[i] ? 0 : j
             j += 1
          */
-        let zero = k.create_zero();
-        let mut j = k.create_one();
+        let zero = FheUsize::new_trivial(k, 0);
+        let mut j = FheUsize::new_trivial(k, 1);
         matches
             .iter()
             .map(|mi| {
@@ -155,7 +155,7 @@ impl FheString {
     }
 
     /// Returns the index of the last occurence of `s`, if existent.
-    pub fn rfind(&self, k: &ServerKey, s: &FheString) -> FheOption<RadixCiphertext> {
+    pub fn rfind(&self, k: &ServerKey, s: &FheString) -> FheOption<FheUsize> {
         let found = self.find_all(k, s);
 
         // Determine index of first match in reverse order.
@@ -184,7 +184,7 @@ impl FheString {
         k: &ServerKey,
         i: usize,
         p: fn(&ServerKey, &FheAsciiChar) -> BooleanBlock,
-    ) -> FheOption<RadixCiphertext> {
+    ) -> FheOption<FheUsize> {
         // Search substring.
         let subvec = &self.0.get(i..).unwrap_or_default();
         let index = index_of_unchecked(k, subvec, p);
@@ -201,7 +201,7 @@ impl FheString {
         &self,
         k: &ServerKey,
         p: fn(&ServerKey, &FheAsciiChar) -> BooleanBlock,
-    ) -> FheOption<RadixCiphertext> {
+    ) -> FheOption<FheUsize> {
         index_of_unchecked(k, &self.0, p)
     }
 
@@ -211,7 +211,7 @@ impl FheString {
         &self,
         k: &ServerKey,
         p: fn(&ServerKey, &FheAsciiChar) -> BooleanBlock,
-    ) -> FheOption<RadixCiphertext> {
+    ) -> FheOption<FheUsize> {
         rindex_of_unchecked(k, &self.0, p)
     }
 

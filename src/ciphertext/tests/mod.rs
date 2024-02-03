@@ -1,11 +1,8 @@
-use tfhe::{
-    integer::{BooleanBlock, RadixCiphertext},
-    shortint::prelude::PARAM_MESSAGE_2_CARRY_2_KS_PBS,
-};
+use tfhe::{integer::BooleanBlock, shortint::prelude::PARAM_MESSAGE_2_CARRY_2_KS_PBS};
 
 use crate::{client_key::ClientKey, generate_keys_with_params, server_key::ServerKey};
 
-use super::{FheOption, FheString};
+use super::FheString;
 
 mod compare;
 mod convert;
@@ -17,41 +14,15 @@ mod trim;
 
 fn setup() -> (ClientKey, ServerKey) {
     let _ = env_logger::try_init(); // Ignore error if already initialized.
-    generate_keys_with_params(PARAM_MESSAGE_2_CARRY_2_KS_PBS)
+    generate_keys_with_params(PARAM_MESSAGE_2_CARRY_2_KS_PBS, 255)
 }
 
 fn encrypt_string(k: &ClientKey, s: &str, l: Option<usize>) -> FheString {
     FheString::new(k, s, l).unwrap()
 }
 
-fn encrypt_int(k: &ClientKey, n: u64) -> RadixCiphertext {
-    k.0.encrypt(n)
-}
-
 fn decrypt_bool(k: &ClientKey, b: &BooleanBlock) -> bool {
-    k.0.decrypt_bool(b)
-}
-
-fn decrypt_option_int(k: &ClientKey, opt: &FheOption<RadixCiphertext>) -> Option<usize> {
-    let is_some = k.0.decrypt_bool(&opt.is_some);
-    match is_some {
-        false => None,
-        true => {
-            let val = k.0.decrypt::<u64>(&opt.val);
-            Some(val as usize)
-        }
-    }
-}
-
-fn decrypt_option_string(k: &ClientKey, opt: &FheOption<FheString>) -> Option<String> {
-    let is_some = k.0.decrypt_bool(&opt.is_some);
-    match is_some {
-        false => None,
-        true => {
-            let val = opt.val.decrypt(k);
-            Some(val)
-        }
-    }
+    k.k.decrypt_bool(b)
 }
 
 #[test]
@@ -94,7 +65,7 @@ fn len() {
         let result = t.input.len();
 
         let result_enc = input_enc.len(&server_key);
-        let result_dec = client_key.0.decrypt::<u64>(&result_enc) as usize;
+        let result_dec = client_key.k.decrypt::<u64>(&result_enc.0) as usize;
 
         println!("{:?}", t);
         println!("std = {:?}", result);

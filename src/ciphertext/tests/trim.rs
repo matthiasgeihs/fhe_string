@@ -1,4 +1,4 @@
-use crate::ciphertext::tests::{decrypt_option_string, encrypt_string, setup};
+use crate::ciphertext::tests::{encrypt_string, setup};
 
 #[test]
 fn trim_trim_start_trim_end() {
@@ -125,7 +125,7 @@ fn strip_prefix_strip_suffix() {
         let result = t.a.strip_prefix(t.b).map(|s| s.to_string());
 
         let result_enc = a_enc.strip_prefix(&server_key, &b_enc);
-        let result_dec = decrypt_option_string(&client_key, &result_enc);
+        let result_dec = result_enc.decrypt(&client_key);
 
         println!("strip_prefix: {:?}", t);
         println!("std = {:?}", result);
@@ -137,7 +137,7 @@ fn strip_prefix_strip_suffix() {
         let result = t.a.strip_suffix(t.b).map(|s| s.to_string());
 
         let result_enc = a_enc.strip_suffix(&server_key, &b_enc);
-        let result_dec = decrypt_option_string(&client_key, &result_enc);
+        let result_dec = result_enc.decrypt(&client_key);
 
         println!("strip_suffix: {:?}", t);
         println!("std = {:?}", result);

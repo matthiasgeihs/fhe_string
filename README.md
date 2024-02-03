@@ -55,7 +55,7 @@ cargo test --release
 cargo test --release -- --test-threads=1
 
 # single test with log
-RUST_LOG=trace RUST_BACKTRACE=1 cargo test --release "ciphertext::tests::insert::add" -- --nocapture --exact
+RUST_LOG=trace RUST_BACKTRACE=1 cargo test --release ciphertext::tests::insert::add -- --nocapture --exact
 
 # all tests with time measurement (nightly only)
 cargo test --release -- --test-threads=1 -Z unstable-options --report-time

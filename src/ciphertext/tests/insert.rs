@@ -1,6 +1,9 @@
 use std::ops::Add;
 
-use crate::ciphertext::tests::{encrypt_int, encrypt_string, setup};
+use crate::{
+    ciphertext::tests::{encrypt_string, setup},
+    FheUsize,
+};
 
 #[test]
 fn add() {
@@ -93,7 +96,7 @@ fn repeat() {
 
     test_cases.iter().for_each(|t| {
         let a_enc = encrypt_string(&client_key, t.a, t.a_pad);
-        let n_enc = encrypt_int(&client_key, t.n as u64);
+        let n_enc = FheUsize::new(&client_key, t.n);
 
         let result = t.a.repeat(t.n);
 

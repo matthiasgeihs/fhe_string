@@ -1,6 +1,6 @@
-use crate::ciphertext::{
-    tests::{encrypt_int, encrypt_string, setup},
-    FheString,
+use crate::{
+    ciphertext::tests::{encrypt_string, setup},
+    FheUsize,
 };
 
 #[test]
@@ -48,10 +48,6 @@ fn replace() {
         let replace_enc = encrypt_string(&client_key, t.replace, t.pad);
 
         let result = t.input.replace(t.pattern, t.replace);
-
-        // Cap at max length.
-        let l = std::cmp::min(result.len(), FheString::max_len_with_key(&server_key));
-        let result = result[..l].to_string();
 
         let result_enc = input_enc.replace(&server_key, &pattern_enc, &replace_enc, result.len());
         let result_dec = result_enc.decrypt(&client_key);
@@ -105,13 +101,9 @@ fn replacen() {
         let input_enc = encrypt_string(&client_key, t.input, t.pad);
         let pattern_enc = encrypt_string(&client_key, t.pattern, t.pad);
         let replace_enc = encrypt_string(&client_key, t.replace, t.pad);
-        let n_enc = encrypt_int(&client_key, t.n as u64);
+        let n_enc = FheUsize::new(&client_key, t.n);
 
         let result = t.input.replacen(t.pattern, t.replace, t.n);
-
-        // Cap at max length.
-        let l = std::cmp::min(result.len(), FheString::max_len_with_key(&server_key));
-        let result = result[..l].to_string();
 
         let result_enc = input_enc.replacen(
             &server_key,

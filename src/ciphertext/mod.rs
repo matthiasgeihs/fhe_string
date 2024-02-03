@@ -1,6 +1,6 @@
 //! Types and functionality for working with encrypted strings.
 
-use std::error::Error;
+use std::{cmp, error::Error};
 
 use crate::{
     ciphertext::logic::if_then_else_zero,
@@ -8,7 +8,10 @@ use crate::{
     server_key::ServerKey,
 };
 use rayon::prelude::*;
-use tfhe::integer::{BooleanBlock, RadixCiphertext};
+use tfhe::integer::{
+    BooleanBlock, IntegerCiphertext, IntegerRadixCiphertext, RadixCiphertext,
+    ServerKey as IntegerServerKey,
+};
 
 use self::logic::{any, scalar_if_then_else_zero};
 
@@ -30,7 +33,7 @@ pub struct FheAsciiChar(pub(crate) RadixCiphertext);
 impl FheAsciiChar {
     // Creates an encryption of `c`.
     pub fn new(k: &ClientKey, c: u8) -> Self {
-        Self(k.0.encrypt(c))
+        Self(k.k.encrypt(c))
     }
 }
 
@@ -106,7 +109,7 @@ impl FheString {
         let mut chars = s
             .chars()
             .map(|c| {
-                let ct = k.create_value(c as u8);
+                let ct = k.k.create_trivial_radix(c as u8, k.num_blocks_char);
                 FheAsciiChar(ct)
             })
             .collect::<Vec<_>>();
@@ -122,14 +125,14 @@ impl FheString {
         let chars = self
             .0
             .iter()
-            .map(|c| k.0.decrypt::<u8>(&c.0))
+            .map(|c| k.k.decrypt::<u8>(&c.0))
             .filter(|&c| c != 0u8)
             .collect::<Vec<_>>();
         String::from_utf8(chars).unwrap()
     }
 
     /// Returns the length of `self`.
-    pub fn len(&self, k: &ServerKey) -> RadixCiphertext {
+    pub fn len(&self, k: &ServerKey) -> FheUsize {
         // l = sum_{i in 1..self.len} (self[i-1] != 0 && self[i] == 0) * i
         let v = self
             .0
@@ -143,13 +146,16 @@ impl FheString {
                 let self_i_eq_0 = k.k.scalar_eq_parallelized(&self_i.0, Self::TERMINATOR);
                 let b = k.k.boolean_bitand(&self_isub1_neq_0, &self_i_eq_0);
                 let i = i_sub_1 + 1;
-                let i_radix = k.create_value(i as Uint);
+                let i_radix = FheUsize::new_trivial(k, i);
                 if_then_else_zero(k, &b, &i_radix)
             })
             .collect::<Vec<_>>();
 
-        k.k.unchecked_sum_ciphertexts_vec_parallelized(v)
-            .unwrap_or(k.create_zero())
+        let l = k.k.unchecked_sum_ciphertexts_vec_parallelized(v);
+        match l {
+            Some(l) => l,
+            None => FheUsize::new_trivial(k, 0),
+        }
     }
 
     /// Returns an upper bound on the length of `self`.
@@ -159,7 +165,7 @@ impl FheString {
     }
 
     /// Returns `self[..index]`.
-    pub fn substr_to(&self, k: &ServerKey, index: &RadixCiphertext) -> FheString {
+    pub fn substr_to(&self, k: &ServerKey, index: &FheUsize) -> FheString {
         let v = self
             .0
             .par_iter()
@@ -177,7 +183,7 @@ impl FheString {
     }
 
     /// Returns `self[index..]`.
-    pub fn substr_from(&self, k: &ServerKey, index: &RadixCiphertext) -> FheString {
+    pub fn substr_from(&self, k: &ServerKey, index: &FheUsize) -> FheString {
         let v = (0..self.0.len())
             .into_par_iter()
             .map(|i| {
@@ -192,12 +198,7 @@ impl FheString {
     }
 
     /// Returns `self[start..end]`.
-    pub fn substr_end(
-        &self,
-        k: &ServerKey,
-        start: &RadixCiphertext,
-        end: &RadixCiphertext,
-    ) -> FheString {
+    pub fn substr_end(&self, k: &ServerKey, start: &FheUsize, end: &FheUsize) -> FheString {
         let v = (0..self.0.len())
             .into_par_iter()
             .map(|i| {
@@ -216,7 +217,7 @@ impl FheString {
 
     /// Returns the character at the given index. Returns 0 if the index is out
     /// of bounds.
-    pub fn char_at(&self, k: &ServerKey, i: &RadixCiphertext) -> FheAsciiChar {
+    pub fn char_at(&self, k: &ServerKey, i: &FheUsize) -> FheAsciiChar {
         // ai = i == 0 ? a[0] : 0 + ... + i == n ? a[n] : 0
         let v = self
             .0
@@ -231,15 +232,18 @@ impl FheString {
             })
             .collect::<Vec<_>>();
 
-        let ai =
-            k.k.unchecked_sum_ciphertexts_vec_parallelized(v)
-                .unwrap_or(k.create_zero());
-        FheAsciiChar(ai)
+        let ai = k.k.unchecked_sum_ciphertexts_vec_parallelized(v);
+        match ai {
+            Some(c) => FheAsciiChar(c),
+            None => Self::term_char(k),
+        }
     }
 
     /// Returns the maximum length of an FheString when using key `k`.
     pub fn max_len_with_key<K: Key>(k: &K) -> usize {
-        k.max_int() - 1
+        // We can only handle strings for which the length can be represented by
+        // an FheUsize.
+        FheUsize::max(k)
     }
 
     /// Returns a copy of `self` padded so that it can hold `l` characters.
@@ -262,12 +266,12 @@ impl FheString {
     }
 
     fn term_char(k: &ServerKey) -> FheAsciiChar {
-        FheAsciiChar(k.create_value(Self::TERMINATOR))
+        FheAsciiChar(k.k.create_trivial_radix(Self::TERMINATOR, k.num_blocks_char))
     }
 }
 
 /// Given `v` and `Enc(i)`, return `v[i]`. Returns `0` if `i` is out of bounds.
-pub fn element_at_bool(k: &ServerKey, v: &[BooleanBlock], i: &RadixCiphertext) -> BooleanBlock {
+pub fn element_at_bool(k: &ServerKey, v: &[BooleanBlock], i: &FheUsize) -> BooleanBlock {
     // ai = i == 0 ? a[0] : 0 + ... + i == n ? a[n] : 0
     let v = v
         .par_iter()
@@ -292,7 +296,7 @@ pub fn index_of_unchecked<T: Sync>(
     k: &ServerKey,
     v: &[T],
     p: fn(&ServerKey, &T) -> BooleanBlock,
-) -> FheOption<RadixCiphertext> {
+) -> FheOption<FheUsize> {
     index_of_unchecked_with_options(k, v, p, false)
 }
 
@@ -303,7 +307,7 @@ pub fn rindex_of_unchecked<T: Sync>(
     k: &ServerKey,
     v: &[T],
     p: fn(&ServerKey, &T) -> BooleanBlock,
-) -> FheOption<RadixCiphertext> {
+) -> FheOption<FheUsize> {
     index_of_unchecked_with_options(k, v, p, true)
 }
 
@@ -316,9 +320,9 @@ fn index_of_unchecked_with_options<T: Sync>(
     v: &[T],
     p: fn(&ServerKey, &T) -> BooleanBlock,
     reverse: bool,
-) -> FheOption<RadixCiphertext> {
+) -> FheOption<FheUsize> {
     let mut b = k.k.create_trivial_boolean_block(false); // Pattern contained.
-    let mut index = k.create_zero(); // Pattern index.
+    let mut index = FheUsize::new_trivial(k, 0); // Pattern index.
 
     let items: Vec<_> = if reverse {
         v.iter().enumerate().rev().collect()
@@ -363,7 +367,7 @@ pub struct FheOption<T> {
 
 impl FheOption<RadixCiphertext> {
     pub fn decrypt(&self, k: &ClientKey) -> Option<Uint> {
-        let is_some = k.0.decrypt_bool(&self.is_some);
+        let is_some = k.k.decrypt_bool(&self.is_some);
         match is_some {
             true => {
                 let val = k.decrypt::<Uint>(&self.val);
@@ -374,9 +378,19 @@ impl FheOption<RadixCiphertext> {
     }
 }
 
+impl FheOption<FheUsize> {
+    pub fn decrypt(&self, k: &ClientKey) -> Option<usize> {
+        let is_some = k.k.decrypt_bool(&self.is_some);
+        match is_some {
+            true => Some(k.decrypt_usize(&self.val)),
+            false => None,
+        }
+    }
+}
+
 impl FheOption<FheString> {
     pub fn decrypt(&self, k: &ClientKey) -> Option<String> {
-        let is_some = k.0.decrypt_bool(&self.is_some);
+        let is_some = k.k.decrypt_bool(&self.is_some);
         match is_some {
             true => {
                 let val = self.val.decrypt(k);
@@ -384,5 +398,78 @@ impl FheOption<FheString> {
             }
             false => None,
         }
+    }
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct FheUsize(pub(crate) RadixCiphertext);
+
+impl FheUsize {
+    /// Creates a new encrypted usize with value `v`.
+    pub fn new(k: &ClientKey, v: usize) -> Self {
+        let c = k.k.encrypt(v as u64);
+        let num_blocks = c.blocks().len();
+        match num_blocks.cmp(&k.num_blocks_usize) {
+            cmp::Ordering::Less => {
+                let sk = IntegerServerKey::new_radix_server_key(&k.k);
+                let c = sk
+                    .extend_radix_with_trivial_zero_blocks_msb(&c, k.num_blocks_usize - num_blocks);
+                FheUsize(c)
+            }
+            cmp::Ordering::Equal => FheUsize(c),
+            cmp::Ordering::Greater => {
+                let sk = IntegerServerKey::new_radix_server_key(&k.k);
+                let c = sk.trim_radix_blocks_msb(&c, num_blocks - k.num_blocks_usize);
+                FheUsize(c)
+            }
+        }
+    }
+
+    /// Creates a new trivial usize ciphertext with value `v`.
+    pub fn new_trivial(k: &ServerKey, v: usize) -> FheUsize {
+        Self(k.k.create_trivial_radix(v as u64, k.num_blocks_usize))
+    }
+
+    /// Creates a new trivial usize ciphertext with value `b ? 1 : 0`.
+    pub fn new_from_bool(k: &ServerKey, b: &BooleanBlock) -> FheUsize {
+        Self(b.clone().into_radix(k.num_blocks_usize, &k.k))
+    }
+
+    pub fn max<K: Key>(k: &K) -> usize {
+        k.msg_mod().pow(k.num_blocks_usize() as u32) - 1
+    }
+
+    pub fn decrypt(&self, k: &ClientKey) -> usize {
+        k.k.decrypt::<u64>(&self.0) as usize
+    }
+}
+
+impl IntegerRadixCiphertext for FheUsize {
+    const IS_SIGNED: bool = false;
+
+    fn into_blocks(self) -> Vec<tfhe::shortint::prelude::Ciphertext> {
+        self.0.into_blocks()
+    }
+}
+
+impl IntegerCiphertext for FheUsize {
+    fn blocks(&self) -> &[tfhe::shortint::prelude::Ciphertext] {
+        self.0.blocks()
+    }
+
+    fn from_blocks(blocks: Vec<tfhe::shortint::prelude::Ciphertext>) -> Self {
+        let c = RadixCiphertext::from_blocks(blocks);
+        Self(c)
+    }
+
+    fn blocks_mut(&mut self) -> &mut [tfhe::shortint::prelude::Ciphertext] {
+        self.0.blocks_mut()
+    }
+}
+
+impl From<Vec<tfhe::shortint::Ciphertext>> for FheUsize {
+    fn from(value: Vec<tfhe::shortint::Ciphertext>) -> Self {
+        let c = RadixCiphertext::from(value);
+        Self(c)
     }
 }

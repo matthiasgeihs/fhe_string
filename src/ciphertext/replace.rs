@@ -1,6 +1,6 @@
 //! Functionality for string replacement.
 
-use tfhe::integer::{IntegerCiphertext, RadixCiphertext};
+use tfhe::integer::IntegerCiphertext;
 
 use crate::{
     ciphertext::{
@@ -11,7 +11,7 @@ use crate::{
     server_key::ServerKey,
 };
 
-use super::{FheAsciiChar, FheString};
+use super::{FheAsciiChar, FheString, FheUsize};
 
 impl FheString {
     /// Returns `self` where `p` is replaced by `s` up to length `l`.
@@ -26,7 +26,7 @@ impl FheString {
         k: &ServerKey,
         p: &FheString,
         s: &FheString,
-        n_max: &RadixCiphertext,
+        n_max: &FheUsize,
         l: usize,
     ) -> FheString {
         self.replace_opt(k, p, s, Some(n_max), l)
@@ -40,7 +40,7 @@ impl FheString {
         k: &ServerKey,
         p: &FheString,
         s: &FheString,
-        n_max: Option<&RadixCiphertext>,
+        n_max: Option<&FheUsize>,
         l: usize,
     ) -> FheString {
         let l = std::cmp::min(l, Self::max_len_with_key(k));
@@ -60,8 +60,8 @@ impl FheString {
             j += 1
          */
         let mut in_match = k.k.create_trivial_boolean_block(false);
-        let mut j = k.create_zero();
-        let mut n = k.create_zero();
+        let mut j = FheUsize::new_trivial(k, 0);
+        let mut n = FheUsize::new_trivial(k, 0);
         let mut v = Vec::<FheAsciiChar>::new();
         (0..l).for_each(|i| {
             log::trace!("replace_nopt: at index {i}");

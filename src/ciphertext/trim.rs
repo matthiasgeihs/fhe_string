@@ -1,13 +1,13 @@
 //! Functionality for string trimming.
 
 use rayon::{join, prelude::*};
-use tfhe::integer::{BooleanBlock, RadixCiphertext};
+use tfhe::integer::BooleanBlock;
 
 use crate::server_key::ServerKey;
 
 use super::{
     index_of_unchecked, logic::if_then_else_zero, rindex_of_unchecked, FheAsciiChar, FheOption,
-    FheString, Uint,
+    FheString, FheUsize, Uint,
 };
 
 impl FheAsciiChar {
@@ -116,7 +116,7 @@ impl FheString {
     }
 
     /// Returns `self[..index]`.
-    pub fn truncate(&self, k: &ServerKey, index: &RadixCiphertext) -> FheString {
+    pub fn truncate(&self, k: &ServerKey, index: &FheUsize) -> FheString {
         let v = self
             .0
             .par_iter()

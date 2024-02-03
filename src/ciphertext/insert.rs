@@ -1,7 +1,5 @@
 //! Functionality for string insertion.
 
-use tfhe::integer::RadixCiphertext;
-
 use rayon::{join, prelude::*};
 
 use crate::{
@@ -9,7 +7,7 @@ use crate::{
     server_key::ServerKey,
 };
 
-use super::FheString;
+use super::{FheString, FheUsize};
 
 impl FheString {
     /// Returns `self + s`.
@@ -19,7 +17,7 @@ impl FheString {
     }
 
     /// Returns `self` repeated `n` times up to length `l`.
-    pub fn repeat(&self, k: &ServerKey, n: &RadixCiphertext, l: usize) -> FheString {
+    pub fn repeat(&self, k: &ServerKey, n: &FheUsize, l: usize) -> FheString {
         let l = std::cmp::min(l, Self::max_len_with_key(k));
         let self_len = self.len(k);
         let n_mul_self_len = k.k.mul_parallelized(n, &self_len);
@@ -29,7 +27,7 @@ impl FheString {
                 log::trace!("repeat: at index {i}");
 
                 // v[i] = i < n * self.len ? self[i % self.len] : 0
-                let i_radix = k.create_value(i as Uint);
+                let i_radix = FheUsize::new_trivial(k, i);
                 let i_lt_n_mul_self_len = k.k.lt_parallelized(&i_radix, &n_mul_self_len);
                 let i_mod_self_len = k.k.rem_parallelized(&i_radix, &self_len);
                 let self_i_mod_self_len = self.char_at(k, &i_mod_self_len);
@@ -47,7 +45,7 @@ impl FheString {
     ///
     /// # Panics
     /// Panics on index out of bounds.
-    pub fn insert(&self, k: &ServerKey, index: &RadixCiphertext, s: &FheString) -> FheString {
+    pub fn insert(&self, k: &ServerKey, index: &FheUsize, s: &FheString) -> FheString {
         let a = self;
         let b = s;
         let l = std::cmp::min(a.max_len() + b.max_len(), Self::max_len_with_key(k));
@@ -70,7 +68,7 @@ impl FheString {
                         (0..l)
                             .into_par_iter()
                             .map(|i| {
-                                let i_radix = k.create_value(i as Uint);
+                                let i_radix = FheUsize::new_trivial(k, i);
                                 let i_sub_index = k.k.sub_parallelized(&i_radix, index);
                                 b.char_at(k, &i_sub_index)
                             })
@@ -80,7 +78,7 @@ impl FheString {
                         (0..l)
                             .into_par_iter()
                             .map(|i| {
-                                let i_radix = k.create_value(i as Uint);
+                                let i_radix = FheUsize::new_trivial(k, i);
                                 let i_sub_b_len = k.k.sub_parallelized(&i_radix, &b_len);
                                 a.char_at(k, &i_sub_b_len)
                             })
