@@ -27,6 +27,13 @@ mod trim;
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct FheAsciiChar(pub(crate) RadixCiphertext);
 
+impl FheAsciiChar {
+    // Creates an encryption of `c`.
+    pub fn new(k: &ClientKey, c: u8) -> Self {
+        Self(k.0.encrypt(c))
+    }
+}
+
 /// FheString is a wrapper type for `Vec<FheAsciiChar>`. It is assumed to be
 /// 0-terminated.
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -37,7 +44,7 @@ type Uint = u64;
 
 impl FheString {
     /// ASCII value of the string termination character.
-    const TERMINATOR: Uint = 0;
+    const TERMINATOR: u8 = 0;
 
     /// Creates a new FheString from an ascii string using the provided key. The
     /// input string must only contain ascii characters and must not contain any
@@ -51,7 +58,7 @@ impl FheString {
     pub fn new(k: &ClientKey, s: &str, l: Option<usize>) -> Result<Self, Box<dyn Error>> {
         if !s.is_ascii() {
             return Err("string is not ascii".into());
-        } else if s.chars().any(|x| x as Uint == Self::TERMINATOR) {
+        } else if s.chars().any(|x| x as u8 == Self::TERMINATOR) {
             return Err("string contains terminator character".into());
         } else if s.len() > Self::max_len_with_key(k) {
             return Err("string length exceeds maximum length".into());
@@ -66,23 +73,18 @@ impl FheString {
         // Encrypt characters.
         let mut chars = s
             .chars()
-            .map(|c| {
-                let ct = k.0.encrypt(c as u8);
-                FheAsciiChar(ct)
-            })
+            .map(|c| FheAsciiChar::new(k, c as u8))
             .collect::<Vec<_>>();
 
         // Append terminating character.
-        let term = k.0.encrypt(Self::TERMINATOR);
-        let term = FheAsciiChar(term);
+        let term = FheAsciiChar::new(k, Self::TERMINATOR);
         chars.push(term);
 
         // Optional: Pad to length.
         if let Some(l) = l {
             (0..l + 1 - chars.len()).for_each(|_| {
-                let term = k.0.encrypt(Self::TERMINATOR);
-                let term = FheAsciiChar(term);
-                chars.push(term.clone())
+                let term = FheAsciiChar::new(k, Self::TERMINATOR);
+                chars.push(term)
             });
         }
 
@@ -94,7 +96,7 @@ impl FheString {
     pub fn new_trivial(k: &ServerKey, s: &str) -> Result<Self, Box<dyn Error>> {
         if !s.is_ascii() {
             return Err("string is not ascii".into());
-        } else if s.chars().any(|x| x as Uint == Self::TERMINATOR) {
+        } else if s.chars().any(|x| x as u8 == Self::TERMINATOR) {
             return Err("string contains terminator character".into());
         } else if s.len() > Self::max_len_with_key(k) {
             return Err("string length exceeds maximum length".into());
@@ -110,8 +112,7 @@ impl FheString {
             .collect::<Vec<_>>();
 
         // Append terminating character.
-        let term = k.create_value(Self::TERMINATOR);
-        let term = FheAsciiChar(term);
+        let term = Self::term_char(k);
         chars.push(term);
 
         Ok(FheString(chars))
@@ -159,7 +160,6 @@ impl FheString {
 
     /// Returns `self[..index]`.
     pub fn substr_to(&self, k: &ServerKey, index: &RadixCiphertext) -> FheString {
-        let term = k.create_value(FheString::TERMINATOR);
         let v = self
             .0
             .par_iter()
@@ -169,7 +169,7 @@ impl FheString {
 
                 // a[i] = i < index ? a[i] : 0
                 let i_lt_index = k.k.scalar_gt_parallelized(index, i as Uint);
-                let ai = k.k.if_then_else_parallelized(&i_lt_index, &ai.0, &term);
+                let ai = if_then_else_zero(k, &i_lt_index, &ai.0);
                 FheAsciiChar(ai)
             })
             .collect();
@@ -227,7 +227,6 @@ impl FheString {
 
                 // i == j ? a[j] : 0
                 let i_eq_j = k.k.scalar_eq_parallelized(i, j as Uint);
-
                 if_then_else_zero(k, &i_eq_j, &aj.0)
             })
             .collect::<Vec<_>>();

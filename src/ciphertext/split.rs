@@ -437,10 +437,9 @@ impl FheString {
         let whitespace = self.find_all_pred_unchecked(k, is_whitespace);
         let next_whitespace = self.find_all_next_pred_unchecked(k, is_whitespace);
 
-        let zero = k.create_zero();
         let opt_default = FheOption {
             is_some: k.k.create_trivial_boolean_block(false),
-            val: zero.clone(),
+            val: k.create_zero(),
         };
 
         let self_len = self.len(k);

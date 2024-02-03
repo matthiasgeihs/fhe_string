@@ -100,7 +100,7 @@ impl FheString {
         });
 
         // Append 0 to terminate string.
-        v.push(FheAsciiChar(k.create_zero()));
+        v.push(Self::term_char(k));
         FheString(v)
     }
 }

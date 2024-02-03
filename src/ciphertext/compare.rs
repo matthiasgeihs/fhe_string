@@ -13,8 +13,7 @@ impl FheString {
     /// Returns whether `self` is empty. The result is an encryption of 1 if
     /// this is the case and an encryption of 0 otherwise.
     pub fn is_empty(&self, k: &ServerKey) -> BooleanBlock {
-        let term = k.create_value(Self::TERMINATOR);
-        k.k.eq_parallelized(&self.0[0].0, &term)
+        k.k.scalar_eq_parallelized(&self.0[0].0, Self::TERMINATOR)
     }
 
     /// Returns `self == s`. The result is an encryption of 1 if this is the

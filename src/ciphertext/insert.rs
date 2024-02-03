@@ -5,7 +5,7 @@ use tfhe::integer::RadixCiphertext;
 use rayon::{join, prelude::*};
 
 use crate::{
-    ciphertext::{FheAsciiChar, Uint},
+    ciphertext::{logic::if_then_else_zero, FheAsciiChar, Uint},
     server_key::ServerKey,
 };
 
@@ -33,17 +33,13 @@ impl FheString {
                 let i_lt_n_mul_self_len = k.k.lt_parallelized(&i_radix, &n_mul_self_len);
                 let i_mod_self_len = k.k.rem_parallelized(&i_radix, &self_len);
                 let self_i_mod_self_len = self.char_at(k, &i_mod_self_len);
-                let vi = k.k.if_then_else_parallelized(
-                    &i_lt_n_mul_self_len,
-                    &self_i_mod_self_len.0,
-                    &k.create_zero(),
-                );
+                let vi = if_then_else_zero(k, &i_lt_n_mul_self_len, &self_i_mod_self_len.0);
                 FheAsciiChar(vi)
             })
             .collect::<Vec<_>>();
 
         // Append 0 to terminate string.
-        v.push(FheAsciiChar(k.create_zero()));
+        v.push(Self::term_char(k));
         FheString(v)
     }
 
@@ -125,7 +121,7 @@ impl FheString {
             .collect::<Vec<_>>();
 
         // Append 0 to terminate string.
-        v.push(FheAsciiChar(k.create_zero()));
+        v.push(Self::term_char(k));
         FheString(v)
     }
 }
