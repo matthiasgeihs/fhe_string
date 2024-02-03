@@ -236,7 +236,7 @@ impl FheString {
                     .map(|(ai, bi)| {
                         let eq = k.k.eq_parallelized(&ai.0, &bi.0);
                         let is_term = &k.k.scalar_eq_parallelized(&ai.0, FheString::TERMINATOR);
-                        k.k.boolean_bitor(&eq, &is_term)
+                        k.k.boolean_bitor(&eq, is_term)
                     })
                     .collect::<Vec<_>>();
                 all(k, &v)

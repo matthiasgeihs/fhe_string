@@ -5,7 +5,7 @@ use tfhe::integer::BooleanBlock;
 
 use crate::server_key::ServerKey;
 
-use super::{FheAsciiChar, FheString, Uint};
+use super::{FheAsciiChar, FheString};
 
 impl FheAsciiChar {
     const CASE_DIFF: u8 = 32;
@@ -13,16 +13,16 @@ impl FheAsciiChar {
     /// Returns whether `self` is uppercase.
     pub fn is_uppercase(&self, k: &ServerKey) -> BooleanBlock {
         // (65 <= c <= 90)
-        let c_geq_65 = k.k.scalar_ge_parallelized(&self.0, 65 as Uint);
-        let c_leq_90 = k.k.scalar_le_parallelized(&self.0, 90 as Uint);
+        let c_geq_65 = k.k.scalar_ge_parallelized(&self.0, 65u8);
+        let c_leq_90 = k.k.scalar_le_parallelized(&self.0, 90u8);
         k.k.boolean_bitand(&c_geq_65, &c_leq_90)
     }
 
     /// Returns whether `self` is lowercase.
     pub fn is_lowercase(&self, k: &ServerKey) -> BooleanBlock {
         // (97 <= c <= 122)
-        let c_geq_97 = k.k.scalar_ge_parallelized(&self.0, 97 as u8);
-        let c_leq_122 = k.k.scalar_le_parallelized(&self.0, 122 as u8);
+        let c_geq_97 = k.k.scalar_ge_parallelized(&self.0, 97u8);
+        let c_leq_122 = k.k.scalar_le_parallelized(&self.0, 122u8);
         k.k.boolean_bitand(&c_geq_97, &c_leq_122)
     }
 
@@ -30,7 +30,7 @@ impl FheAsciiChar {
     pub fn to_lowercase(&self, k: &ServerKey) -> FheAsciiChar {
         // c + (c.uppercase ? 32 : 0)
         let ucase = self.is_uppercase(k);
-        let self_add_32 = k.k.scalar_add_parallelized(&self.0, Self::CASE_DIFF as u8);
+        let self_add_32 = k.k.scalar_add_parallelized(&self.0, Self::CASE_DIFF);
         let lcase = k.k.if_then_else_parallelized(&ucase, &self_add_32, &self.0);
         FheAsciiChar(lcase)
     }

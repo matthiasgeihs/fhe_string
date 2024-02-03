@@ -12,7 +12,7 @@ use super::Uint;
 // Returns `a ? b : 0`.
 pub fn if_then_else_zero(k: &ServerKey, a: &BooleanBlock, b: &RadixCiphertext) -> RadixCiphertext {
     let a_radix = a.clone().into_radix(b.blocks().len(), &k.k);
-    k.k.mul_parallelized(&a_radix, &b)
+    k.k.mul_parallelized(&a_radix, b)
 }
 
 // Returns `a ? b : 0`, where `b` is a scalar.
