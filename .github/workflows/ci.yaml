@@ -8,4 +8,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      - run: cargo fmt
+      - run: cargo clippy
       - run: cargo test --release --features "tfhe/x86_64-unix" -- --test-threads=1
