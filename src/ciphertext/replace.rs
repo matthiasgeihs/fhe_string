@@ -1,17 +1,16 @@
 //! Functionality for string replacement.
 
-use tfhe::integer::{IntegerCiphertext, RadixCiphertext};
+use tfhe::integer::IntegerCiphertext;
 
 use crate::{
     ciphertext::{
         element_at_bool,
         logic::{if_then_else_bool, if_then_else_zero},
-        Uint,
     },
     server_key::ServerKey,
 };
 
-use super::{FheAsciiChar, FheString};
+use super::{FheAsciiChar, FheString, FheUsize};
 
 impl FheString {
     /// Returns `self` where `p` is replaced by `s` up to length `l`.
@@ -26,7 +25,7 @@ impl FheString {
         k: &ServerKey,
         p: &FheString,
         s: &FheString,
-        n_max: &RadixCiphertext,
+        n_max: &FheUsize,
         l: usize,
     ) -> FheString {
         self.replace_opt(k, p, s, Some(n_max), l)
@@ -40,7 +39,7 @@ impl FheString {
         k: &ServerKey,
         p: &FheString,
         s: &FheString,
-        n_max: Option<&RadixCiphertext>,
+        n_max: Option<&FheUsize>,
         l: usize,
     ) -> FheString {
         let l = std::cmp::min(l, Self::max_len_with_key(k));
@@ -60,15 +59,15 @@ impl FheString {
             j += 1
          */
         let mut in_match = k.k.create_trivial_boolean_block(false);
-        let mut j = k.create_zero();
-        let mut n = k.create_zero();
+        let mut j = FheUsize::new_trivial(k, 0);
+        let mut n = FheUsize::new_trivial(k, 0);
         let mut v = Vec::<FheAsciiChar>::new();
         (0..l).for_each(|i| {
             log::trace!("replace_nopt: at index {i}");
 
             // c = i + n * len_diff
             let n_mul_lendiff = k.k.mul_parallelized(&n, &len_diff);
-            let c = k.k.scalar_add_parallelized(&n_mul_lendiff, i as Uint);
+            let c = k.k.scalar_add_parallelized(&n_mul_lendiff, i as u64);
 
             let j_lt_slen = k.k.lt_parallelized(&j, &s_len);
             let match_and_jltslen = k.k.boolean_bitand(&in_match, &j_lt_slen);
@@ -96,11 +95,11 @@ impl FheString {
             let vi = k.k.if_then_else_parallelized(&in_match, &sj, &self_c);
             v.push(FheAsciiChar(vi));
 
-            j = k.k.scalar_add_parallelized(&j, 1 as Uint);
+            j = k.k.scalar_add_parallelized(&j, 1u8);
         });
 
         // Append 0 to terminate string.
-        v.push(FheAsciiChar(k.create_zero()));
+        v.push(Self::term_char(k));
         FheString(v)
     }
 }

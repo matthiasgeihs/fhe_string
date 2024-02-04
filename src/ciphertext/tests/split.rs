@@ -1,4 +1,7 @@
-use crate::ciphertext::tests::{encrypt_int, encrypt_string, setup};
+use crate::{
+    ciphertext::tests::{encrypt_string, setup},
+    FheUsize,
+};
 
 #[test]
 fn split() {
@@ -103,7 +106,7 @@ fn splitn() {
     test_cases.iter().enumerate().for_each(|(i, t)| {
         let input_enc = encrypt_string(&client_key, t.input, t.pad);
         let pattern_enc = encrypt_string(&client_key, t.pattern, t.pad);
-        let n_enc = encrypt_int(&client_key, t.n as u64);
+        let n_enc = FheUsize::new(&client_key, t.n);
 
         let result = t.input.splitn(t.n, t.pattern).collect::<Vec<_>>();
 
@@ -424,7 +427,7 @@ fn rsplitn() {
     test_cases.iter().enumerate().for_each(|(i, t)| {
         let input_enc = encrypt_string(&client_key, t.input, t.pad);
         let pattern_enc = encrypt_string(&client_key, t.pattern, t.pad);
-        let n_enc = encrypt_int(&client_key, t.n as u64);
+        let n_enc = FheUsize::new(&client_key, t.n);
 
         let result = t.input.rsplitn(t.n, t.pattern).collect::<Vec<_>>();
 
@@ -483,7 +486,7 @@ fn split_once() {
             .map(|v| (v.0.to_string(), v.1.to_string()));
 
         let opt_v_enc = input_enc.split_once(&server_key, &pattern_enc);
-        let b_dec = client_key.0.decrypt_bool(&opt_v_enc.is_some);
+        let b_dec = client_key.k.decrypt_bool(&opt_v_enc.is_some);
         let val0_dec = opt_v_enc.val.0.decrypt(&client_key);
         let val1_dec = opt_v_enc.val.1.decrypt(&client_key);
         let opt_v_dec = match b_dec {
@@ -543,7 +546,7 @@ fn rsplit_once() {
             .map(|v| (v.0.to_string(), v.1.to_string()));
 
         let opt_v_enc = input_enc.rsplit_once(&server_key, &pattern_enc);
-        let b_dec = client_key.0.decrypt_bool(&opt_v_enc.is_some);
+        let b_dec = client_key.k.decrypt_bool(&opt_v_enc.is_some);
         let val0_dec = opt_v_enc.val.0.decrypt(&client_key);
         let val1_dec = opt_v_enc.val.1.decrypt(&client_key);
         let opt_v_dec = match b_dec {

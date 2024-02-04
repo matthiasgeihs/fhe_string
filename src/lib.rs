@@ -31,7 +31,7 @@ use tfhe::{
     shortint::{parameters::PARAM_MESSAGE_2_CARRY_2_KS_PBS, ClassicPBSParameters},
 };
 
-pub use ciphertext::{split::FheStringSliceVector, FheAsciiChar, FheOption, FheString};
+pub use ciphertext::{split::FheStringSliceVector, FheAsciiChar, FheOption, FheString, FheUsize};
 pub use client_key::ClientKey;
 pub use server_key::ServerKey;
 
@@ -39,25 +39,39 @@ mod ciphertext;
 mod client_key;
 mod server_key;
 
-/// Generates a fresh key pair for handling encrypted strings up to length
-/// `2^8-1`.
+/// Generates a fresh key pair using the default parameters. The maximum string
+/// length is set to 255.
 pub fn generate_keys() -> (ClientKey, ServerKey) {
-    generate_keys_with_params(PARAM_MESSAGE_2_CARRY_2_KS_PBS)
+    generate_keys_with_params(PARAM_MESSAGE_2_CARRY_2_KS_PBS, 255)
 }
 
-/// Generates a fresh key pair for handling encrypted strings up to length
-/// `2^8-1`, using the given encryption scheme parameters.
-pub fn generate_keys_with_params(params: ClassicPBSParameters) -> (ClientKey, ServerKey) {
-    let ascii_bitlen = 8;
-    let msg_mod = params.message_modulus.0;
-    let num_blocks = ascii_bitlen / msg_mod.ilog2() as usize;
-    let (client_key, server_key) = gen_keys_radix(params, num_blocks);
+/// Generates a fresh key pair using encryption scheme parameters `p` and
+/// maximum string length `l`.
+pub fn generate_keys_with_params(p: ClassicPBSParameters, l: usize) -> (ClientKey, ServerKey) {
+    let ceil_ilog = |a: usize, b: usize| -> usize {
+        let l = a.ilog(b);
+        match a == b.pow(l) {
+            true => l as usize,
+            false => (l + 1) as usize,
+        }
+    };
+
+    let msg_mod = p.message_modulus.0;
+    const NUM_ASCII_CHARS: usize = 128;
+    let num_blocks_char = ceil_ilog(NUM_ASCII_CHARS, msg_mod);
+    let num_blocks_usize = ceil_ilog(l + 1, msg_mod);
+
+    let (client_key, server_key) = gen_keys_radix(p, num_blocks_char);
     (
-        ClientKey(client_key),
+        ClientKey {
+            k: client_key,
+            num_blocks_usize,
+        },
         ServerKey {
             k: server_key,
-            num_blocks,
             msg_mod,
+            num_blocks_char,
+            num_blocks_usize,
         },
     )
 }

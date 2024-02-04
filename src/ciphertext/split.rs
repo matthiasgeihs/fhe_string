@@ -1,20 +1,20 @@
 //! Functionality for string splitting.
 
 use rayon::prelude::*;
-use tfhe::integer::{IntegerCiphertext, RadixCiphertext};
+use tfhe::integer::IntegerCiphertext;
 
 use crate::{ciphertext::element_at_bool, client_key::ClientKey, server_key::ServerKey};
 
-use super::{FheAsciiChar, FheOption, FheString, Uint};
+use super::{FheAsciiChar, FheOption, FheString, FheUsize};
 
 /// An element of an `FheStringSliceVector`.
 #[derive(Clone)]
 struct FheStringSlice {
     /// The start index of the string slice.
-    start: RadixCiphertext,
+    start: FheUsize,
 
     /// The end index of the string slice, exclusive.
-    end: RadixCiphertext,
+    end: FheUsize,
 }
 
 /// An encrypted vector of substrings of an encrypted reference string.
@@ -29,25 +29,28 @@ pub struct FheStringSliceVector {
 
 impl FheStringSliceVector {
     /// Returns the number of substrings contained in this vector.
-    pub fn len(&self, k: &ServerKey) -> RadixCiphertext {
+    pub fn len(&self, k: &ServerKey) -> FheUsize {
         let v = self
             .v
             .par_iter()
-            .map(|vi| vi.is_some.clone().into_radix(k.num_blocks, &k.k))
+            .map(|vi| FheUsize::new_from_bool(k, &vi.is_some)) // (vi.is_some.clone().into_radix(k.num_blocks_usize, &k.k))
             .collect::<Vec<_>>();
-        k.k.unchecked_sum_ciphertexts_vec_parallelized(v)
-            .unwrap_or(k.create_zero())
+        let l = k.k.unchecked_sum_ciphertexts_vec_parallelized(v);
+        match l {
+            Some(l) => l,
+            None => FheUsize::new_trivial(k, 0),
+        }
     }
 
     /// Returns the substring stored at index `i`, if existent.
-    pub fn get(&self, k: &ServerKey, i: &RadixCiphertext) -> FheOption<FheString> {
-        let mut n = k.create_zero();
+    pub fn get(&self, k: &ServerKey, i: &FheUsize) -> FheOption<FheString> {
+        let mut n = FheUsize::new_trivial(k, 0);
 
         let init = FheOption {
             is_some: k.k.create_trivial_boolean_block(false),
             val: FheStringSlice {
-                start: k.create_zero(),
-                end: k.create_zero(),
+                start: FheUsize::new_trivial(k, 0),
+                end: FheUsize::new_trivial(k, 0),
             },
         };
 
@@ -55,7 +58,7 @@ impl FheStringSliceVector {
             // acc = i == n && vi.is_some ? (j, vi.end) : acc
             let i_eq_n = k.k.eq_parallelized(i, &n);
             let is_some = k.k.boolean_bitand(&i_eq_n, &vi.is_some);
-            let j_radix = k.create_value(j as Uint);
+            let j_radix = FheUsize::new_trivial(k, j);
             let start =
                 k.k.if_then_else_parallelized(&is_some, &j_radix, &acc.val.start);
             let end =
@@ -80,14 +83,14 @@ impl FheStringSliceVector {
     }
 
     /// Truncates `self` starting from index `i`.
-    pub fn truncate(&mut self, k: &ServerKey, i: &RadixCiphertext) {
+    pub fn truncate(&mut self, k: &ServerKey, i: &FheUsize) {
         /*
         n = 0
         for i in v.len:
             v[i] = v[i] if n < i else (0, 0)
             n += v[i].is_start
         */
-        let mut n = k.create_zero();
+        let mut n = FheUsize::new_trivial(k, 0);
 
         self.v = self
             .v
@@ -144,7 +147,7 @@ impl FheStringSliceVector {
     fn expand_first(&mut self, k: &ServerKey) {
         // Find the first item and set its start point to 0.
         let mut not_found = k.k.create_trivial_boolean_block(true);
-        let zero = k.create_zero();
+        let zero = FheUsize::new_trivial(k, 0);
         self.v = self
             .v
             .iter()
@@ -207,12 +210,12 @@ impl FheStringSliceVector {
         self.v
             .iter()
             .filter_map(|vi| {
-                let is_some = k.0.decrypt_bool(&vi.is_some);
+                let is_some = k.k.decrypt_bool(&vi.is_some);
                 match is_some {
                     false => None,
                     true => {
-                        let start = k.0.decrypt::<Uint>(&vi.val.start) as usize;
-                        let end = k.0.decrypt::<Uint>(&vi.val.end) as usize;
+                        let start = vi.val.start.decrypt(k);
+                        let end = vi.val.end.decrypt(k);
                         let slice = s_dec.get(start..end).unwrap_or_default();
                         log::trace!("decrypt slice: [{start}, {end}]");
                         Some(slice.to_string())
@@ -266,7 +269,7 @@ impl FheString {
         let self_len = self.len(k);
 
         let n = self.max_len() + 2; // Maximum number of entries.
-        let n_hidden = k.k.scalar_add_parallelized(&self_len, 2 as Uint); // Better bound based on hidden length.
+        let n_hidden = k.k.scalar_add_parallelized(&self_len, 2u8); // Better bound based on hidden length.
         let mut next_match = self_len.clone();
         let mut elems = (0..n)
             .rev()
@@ -277,18 +280,18 @@ impl FheString {
                 let is_some = if i == 0 {
                     k.k.create_trivial_boolean_block(true)
                 } else {
-                    let i_radix = k.create_value(i as Uint);
+                    let i_radix = FheUsize::new_trivial(k, i);
                     let i_sub_plen = k.k.sub_parallelized(&i_radix, &p_len);
                     let mi = element_at_bool(k, &matches, &i_sub_plen);
-                    let i_lt_n_hidden = k.k.scalar_gt_parallelized(&n_hidden, i as Uint);
+                    let i_lt_n_hidden = k.k.scalar_gt_parallelized(&n_hidden, i as u64);
                     k.k.boolean_bitand(&i_lt_n_hidden, &mi)
                 };
 
                 // next_match_target = i + (inclusive ? p.len : 0)
                 let next_match_target = if inclusive {
-                    k.k.scalar_add_parallelized(&p_len, i as Uint)
+                    k.k.scalar_add_parallelized(&p_len, i as u64)
                 } else {
-                    k.create_value(i as Uint)
+                    FheUsize::new_trivial(k, i)
                 };
 
                 // next_match[i] = matches[i] ? next_match_target : next_match[i+1]
@@ -299,10 +302,10 @@ impl FheString {
 
                 // start = max(i - p.empty, 0)
                 let start = if i > 0 {
-                    let pattern_empty_radix = pattern_empty.clone().into_radix(k.num_blocks, &k.k);
-                    k.k.sub_parallelized(&k.create_value(i as Uint), &pattern_empty_radix)
+                    let pattern_empty_radix = FheUsize::new_from_bool(k, &pattern_empty);
+                    k.k.sub_parallelized(&FheUsize::new_trivial(k, i), &pattern_empty_radix)
                 } else {
-                    k.create_zero()
+                    FheUsize::new_trivial(k, 0)
                 };
 
                 FheOption {
@@ -362,12 +365,7 @@ impl FheString {
     ///
     /// # Limitations
     /// If p.len == 0, the result is undefined.
-    pub fn splitn(
-        &self,
-        k: &ServerKey,
-        n: &RadixCiphertext,
-        p: &FheString,
-    ) -> FheStringSliceVector {
+    pub fn splitn(&self, k: &ServerKey, n: &FheUsize, p: &FheString) -> FheStringSliceVector {
         let mut v = self.split(k, p);
         v.truncate(k, n);
         v.expand_last(k);
@@ -379,12 +377,7 @@ impl FheString {
     ///
     /// # Limitations
     /// If p.len == 0, the result is undefined.
-    pub fn rsplitn(
-        &self,
-        k: &ServerKey,
-        n: &RadixCiphertext,
-        p: &FheString,
-    ) -> FheStringSliceVector {
+    pub fn rsplitn(&self, k: &ServerKey, n: &FheUsize, p: &FheString) -> FheStringSliceVector {
         let mut v = self.rsplit(k, p);
         v.truncate(k, n);
         v.reverse();
@@ -437,10 +430,9 @@ impl FheString {
         let whitespace = self.find_all_pred_unchecked(k, is_whitespace);
         let next_whitespace = self.find_all_next_pred_unchecked(k, is_whitespace);
 
-        let zero = k.create_zero();
         let opt_default = FheOption {
             is_some: k.k.create_trivial_boolean_block(false),
-            val: zero.clone(),
+            val: FheUsize::new_trivial(k, 0),
         };
 
         let self_len = self.len(k);
@@ -470,7 +462,7 @@ impl FheString {
                 FheOption {
                     is_some,
                     val: FheStringSlice {
-                        start: k.create_value(i as Uint),
+                        start: FheUsize::new_trivial(k, i),
                         end,
                     },
                 }

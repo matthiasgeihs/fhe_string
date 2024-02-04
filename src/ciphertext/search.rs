@@ -1,14 +1,14 @@
 //! Functionality for string search.
 
-use rayon::{join, prelude::*};
-use tfhe::integer::{BooleanBlock, RadixCiphertext};
+use rayon::prelude::*;
+use tfhe::integer::BooleanBlock;
 
-use crate::{ciphertext::Uint, server_key::ServerKey};
+use crate::{ciphertext::logic::all, server_key::ServerKey};
 
 use super::{
     index_of_unchecked,
     logic::{any, if_then_else_bool, if_then_else_zero},
-    rindex_of_unchecked, FheAsciiChar, FheOption, FheString,
+    rindex_of_unchecked, FheAsciiChar, FheOption, FheString, FheUsize,
 };
 
 impl FheString {
@@ -20,7 +20,7 @@ impl FheString {
     }
 
     /// Returns the index of the first occurrence of `s`, if existent.
-    pub fn find(&self, k: &ServerKey, s: &FheString) -> FheOption<RadixCiphertext> {
+    pub fn find(&self, k: &ServerKey, s: &FheString) -> FheOption<FheUsize> {
         let found = self.find_all(k, s);
 
         // Determine index of first match.
@@ -55,7 +55,7 @@ impl FheString {
         &self,
         k: &ServerKey,
         p: fn(&ServerKey, &FheAsciiChar) -> BooleanBlock,
-    ) -> Vec<FheOption<RadixCiphertext>> {
+    ) -> Vec<FheOption<FheUsize>> {
         self.0
             .par_iter()
             .enumerate()
@@ -87,7 +87,7 @@ impl FheString {
             in_match = in_match && j < s.len
          */
         let mut in_match = k.k.create_trivial_boolean_block(false);
-        let mut j = k.create_zero();
+        let mut j = FheUsize::new_trivial(k, 0);
         matches
             .iter()
             .map(|mi| {
@@ -98,7 +98,7 @@ impl FheString {
                 in_match = if_then_else_bool(k, &in_match, &in_match, mi);
 
                 // j += 1
-                k.k.scalar_add_assign_parallelized(&mut j, 1 as Uint);
+                k.k.scalar_add_assign_parallelized(&mut j, 1u8);
 
                 // in_match = in_match && j < s.len
                 let j_lt_slen = k.k.lt_parallelized(&j, &s_len);
@@ -129,8 +129,8 @@ impl FheString {
                 j = matches[i] ? 0 : j
             j += 1
          */
-        let zero = k.create_zero();
-        let mut j = k.create_one();
+        let zero = FheUsize::new_trivial(k, 0);
+        let mut j = FheUsize::new_trivial(k, 1);
         matches
             .iter()
             .map(|mi| {
@@ -144,7 +144,7 @@ impl FheString {
                 j = k.k.if_then_else_parallelized(&j_lt_slen_and_mi, &zero, &j);
 
                 // j += 1
-                k.k.scalar_add_assign_parallelized(&mut j, 1 as Uint);
+                k.k.scalar_add_assign_parallelized(&mut j, 1u8);
 
                 mi
             })
@@ -152,7 +152,7 @@ impl FheString {
     }
 
     /// Returns the index of the last occurence of `s`, if existent.
-    pub fn rfind(&self, k: &ServerKey, s: &FheString) -> FheOption<RadixCiphertext> {
+    pub fn rfind(&self, k: &ServerKey, s: &FheString) -> FheOption<FheUsize> {
         let found = self.find_all(k, s);
 
         // Determine index of first match in reverse order.
@@ -181,12 +181,12 @@ impl FheString {
         k: &ServerKey,
         i: usize,
         p: fn(&ServerKey, &FheAsciiChar) -> BooleanBlock,
-    ) -> FheOption<RadixCiphertext> {
+    ) -> FheOption<FheUsize> {
         // Search substring.
         let subvec = &self.0.get(i..).unwrap_or_default();
         let index = index_of_unchecked(k, subvec, p);
         // Add offset.
-        let val = k.k.scalar_add_parallelized(&index.val, i as Uint);
+        let val = k.k.scalar_add_parallelized(&index.val, i as u64);
         FheOption {
             is_some: index.is_some,
             val,
@@ -198,7 +198,7 @@ impl FheString {
         &self,
         k: &ServerKey,
         p: fn(&ServerKey, &FheAsciiChar) -> BooleanBlock,
-    ) -> FheOption<RadixCiphertext> {
+    ) -> FheOption<FheUsize> {
         index_of_unchecked(k, &self.0, p)
     }
 
@@ -208,7 +208,7 @@ impl FheString {
         &self,
         k: &ServerKey,
         p: fn(&ServerKey, &FheAsciiChar) -> BooleanBlock,
-    ) -> FheOption<RadixCiphertext> {
+    ) -> FheOption<FheUsize> {
         rindex_of_unchecked(k, &self.0, p)
     }
 
@@ -220,14 +220,26 @@ impl FheString {
     /// Returns whether `self` ends with the string `s`. The result is an
     /// encryption of 1 if this is the case and an encryption of 0 otherwise.
     pub fn ends_with(&self, k: &ServerKey, s: &FheString) -> BooleanBlock {
-        let opti = self.rfind(k, s);
+        let v = (0..self.0.len() - 1)
+            .into_par_iter()
+            .map(|i| {
+                log::trace!("ends_with: at index {i}");
+                let a = self.0.get(i..).unwrap_or_default();
 
-        // is_end = self.len == i + s.len
-        let (self_len, s_len) = join(|| self.len(k), || s.len(k));
-        let i_add_s_len = k.k.add_parallelized(&opti.val, &s_len);
-        let is_end = k.k.eq_parallelized(&self_len, &i_add_s_len);
+                // v[i] = a[i] == b[i] || b[i + 1] == 0
+                let v = a
+                    .par_iter()
+                    .zip(&s.0)
+                    .map(|(ai, bi)| {
+                        let eq = k.k.eq_parallelized(&ai.0, &bi.0);
+                        let is_term = &k.k.scalar_eq_parallelized(&ai.0, FheString::TERMINATOR);
+                        k.k.boolean_bitor(&eq, is_term)
+                    })
+                    .collect::<Vec<_>>();
+                all(k, &v)
+            })
+            .collect::<Vec<_>>();
 
-        // ends_with = contained && is_end
-        k.k.boolean_bitand(&opti.is_some, &is_end)
+        any(k, &v)
     }
 }

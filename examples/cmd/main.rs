@@ -1,11 +1,8 @@
 use std::{any::Any, fmt::Debug, ops::Add, time::Instant};
 
 use clap::Parser;
-use fhe_string::{generate_keys_with_params, ClientKey, FheOption, FheString, ServerKey};
-use tfhe::{
-    integer::{BooleanBlock, RadixCiphertext},
-    shortint::prelude::PARAM_MESSAGE_2_CARRY_2_KS_PBS,
-};
+use fhe_string::{generate_keys_with_params, ClientKey, FheOption, FheString, FheUsize, ServerKey};
+use tfhe::{integer::BooleanBlock, shortint::prelude::PARAM_MESSAGE_2_CARRY_2_KS_PBS};
 
 /// Run string operations in the encrypted domain.
 #[derive(Parser, Debug)]
@@ -30,6 +27,14 @@ struct Args {
     /// Value used for operations that require parameter `n`.
     #[arg(long, default_value_t = 3)]
     n: usize,
+
+    /// Filter for specific test cases by test case name.
+    #[arg(long)]
+    filter: Option<String>,
+
+    /// Maximum string length.
+    #[arg(long, default_value_t = 255)]
+    l: usize,
 }
 
 fn main() {
@@ -42,9 +47,11 @@ fn main() {
     let pattern = args.pattern;
     let substitution = args.substitution;
     let n = args.n;
+    let l = args.l;
+    let filter = args.filter;
 
     println!("Generating keys...");
-    let (client_key, server_key) = generate_keys_with_params(PARAM_MESSAGE_2_CARRY_2_KS_PBS);
+    let (client_key, server_key) = generate_keys_with_params(PARAM_MESSAGE_2_CARRY_2_KS_PBS, l);
     println!("Done.");
 
     println!("Encrypting input...");
@@ -60,7 +67,7 @@ fn main() {
     println!("Done.");
 
     println!("Encrypting n...");
-    let n_enc = client_key.encrypt(n as u64);
+    let n_enc = FheUsize::new(&client_key, n);
     println!("Done.");
 
     let args = TestCaseInput {
@@ -85,7 +92,7 @@ fn main() {
             std: |args| Box::new(args.input.len()),
             fhe: |args| {
                 let r = args.input_enc.len(&args.server_key);
-                Box::new(args.client_key.decrypt::<u64>(&r) as usize)
+                Box::new(args.client_key.decrypt_usize(&r))
             },
         },
         // search
@@ -509,6 +516,12 @@ fn main() {
 
     let start = Instant::now();
     test_cases.iter().for_each(|t| {
+        if let Some(filter) = &filter {
+            if !(t.name)(&args).contains(filter) {
+                return;
+            }
+        }
+
         let start = Instant::now();
         let result_std = (t.std)(&args);
         let duration_std = start.elapsed();
@@ -567,7 +580,7 @@ struct TestCaseInput {
     input_enc: FheString,
     pattern_enc: FheString,
     substitution_enc: FheString,
-    n_enc: RadixCiphertext,
+    n_enc: FheUsize,
     server_key: ServerKey,
     client_key: ClientKey,
 }
